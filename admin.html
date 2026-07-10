@@ -111,6 +111,7 @@ body{font-family:var(--font);background:#e0e0dc;min-height:100vh;padding:20px;di
         <div class="admin-tab active" id="tabbtn-rendiciones" onclick="cambiarTab('rendiciones')">📋 Rendiciones</div>
         <div class="admin-tab" id="tabbtn-cuentas" onclick="cambiarTab('cuentas')">💳 Responsables del Fondo</div>
         <div class="admin-tab" id="tabbtn-usuarios" onclick="cambiarTab('usuarios')">👤 Usuarios</div>
+        <div class="admin-tab" id="tabbtn-centros" onclick="cambiarTab('centros')">🏷️ Centros de Costo</div>
       </div>
 
       <div class="tab-content active" id="tab-rendiciones">
@@ -173,6 +174,17 @@ body{font-family:var(--font);background:#e0e0dc;min-height:100vh;padding:20px;di
         <div id="lista-usuarios"></div>
       </div>
 
+      <div class="tab-content" id="tab-centros">
+        <div class="hint" style="margin:12px 0;color:var(--text2);font-size:12px;">
+          Estos son los Centro de Costo / Proyecto que aparecen en el formulario de terreno. Desactivar uno no borra las rendiciones ya registradas con él.
+        </div>
+        <div class="add-row">
+          <input type="text" id="nuevo-centro" placeholder="Nombre del nuevo centro de costo">
+          <button style="background:var(--purple-dark);padding:0 16px;border-radius:8px;border:none;color:#fff;font-weight:600;cursor:pointer;" onclick="agregarItem('centros_costo','nuevo-centro','lista-centros')">+ Agregar</button>
+        </div>
+        <div id="lista-centros"></div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -209,6 +221,7 @@ function login(){
     cargar();
     cargarListaAdmin('cuentas_responsables', 'lista-cuentas');
     cargarListaAdmin('usuarios', 'lista-usuarios');
+    cargarListaAdmin('centros_costo', 'lista-centros');
   } else {
     document.getElementById('login-err').classList.add('show');
   }
