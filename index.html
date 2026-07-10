@@ -158,6 +158,11 @@ body{font-family:var(--font);background:#e0e0dc;display:flex;align-items:flex-st
           <input type="number" id="f-monto" inputmode="numeric" placeholder="0">
         </div>
         <div class="field">
+          <label>N° Folio/Boleta</label>
+          <input type="text" id="f-folio" placeholder="Se detecta desde la foto...">
+          <div class="hint">Referencia para validar la lectura automática — corrígelo si no calza con la boleta.</div>
+        </div>
+        <div class="field">
           <label>Centro de Costo / Proyecto *</label>
           <select id="f-centro">
             <option value="">Selecciona...</option>
@@ -209,10 +214,6 @@ body{font-family:var(--font);background:#e0e0dc;display:flex;align-items:flex-st
 const SB_URL = 'https://badqakfrggfyseobcqvn.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhZHFha2ZyZ2dmeXNlb2JjcXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3MTAyODYsImV4cCI6MjA5OTI4NjI4Nn0.UFd85reDPFCAaXnb6d06UgWrWs9jt9L1KhP6bl98Nfg';
 const H = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Accept':'application/json'};
-
-// Técnicos que pueden figurar como Responsable Rendición además de los
-// Responsables del Fondo (que se cargan dinámicamente desde Supabase).
-const TECNICOS_FIJOS = ['Jorge C.', 'Demis S.', 'No Aplica'];
 
 let fotos = []; // {file, dataUrl}
 
@@ -294,14 +295,16 @@ function mostrarOcrEstado(texto, cargando){
 async function leerBoleta(dataUrl){
   if(ocrEnCurso || typeof Tesseract === 'undefined') return;
   ocrEnCurso = true;
-  mostrarOcrEstado('Leyendo la boleta para proponer fecha y monto...', true);
+  mostrarOcrEstado('Leyendo la boleta para proponer fecha, monto y folio...', true);
   try{
     const { data: { text } } = await Tesseract.recognize(dataUrl, 'spa');
     const monto = extraerMonto(text);
     const fecha = extraerFecha(text);
+    const folio = extraerFolio(text);
     const detectado = [];
     if(monto){ document.getElementById('f-monto').value = monto; detectado.push('el monto'); }
     if(fecha){ document.getElementById('f-fecha').value = fecha; detectado.push('la fecha'); }
+    if(folio){ document.getElementById('f-folio').value = folio; detectado.push('el N° de folio'); }
     if(detectado.length){
       mostrarOcrEstado(`Detectamos ${detectado.join(' y ')} automáticamente — revisa que estén correctos en el siguiente paso.`, false);
     } else {
@@ -337,22 +340,57 @@ function extraerMonto(text){
   return null;
 }
 
-function extraerFecha(text){
-  const regex = /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/g;
-  const idxFecha = text.toUpperCase().indexOf('FECHA');
-  let m, mejor = null;
-  while((m = regex.exec(text)) !== null){
-    if(!mejor) mejor = m;
-    if(idxFecha >= 0 && Math.abs(m.index - idxFecha) < 30){ mejor = m; break; }
+function extraerFolio(text){
+  // Busca el N° de boleta/recibo en líneas que digan "BOLETA" o "RECIBO"
+  // (ignorando la línea de resolución del SII), tomando el último token
+  // alfanumérico con dígitos de esa misma línea. Si esa línea no trae
+  // ningún número (ej. es solo un encabezado suelto), seguimos revisando
+  // las demás líneas en vez de adivinar con la línea siguiente.
+  const lineas = text.split('\n').map(l => l.trim());
+  const tokenRx = /[A-Z0-9]{4,}(?:-[A-Z0-9]{3,})?/gi;
+  for(const linea of lineas){
+    if(!/BOLETA|RECIBO/i.test(linea)) continue;
+    if(/RES\.?\s*\d|RESOLUCI/i.test(linea)) continue;
+    const enLinea = (linea.match(tokenRx) || []).filter(t => /\d/.test(t));
+    if(enLinea.length) return enLinea[enLinea.length - 1].toUpperCase();
   }
-  if(!mejor) return null;
-  let [, d, mo, y] = mejor;
-  if(y.length === 2) y = '20' + y;
-  d = d.padStart(2,'0'); mo = mo.padStart(2,'0');
-  if(Number(mo) > 12 || Number(d) > 31 || Number(mo) < 1 || Number(d) < 1) return null;
+  return null;
+}
+
+function extraerFecha(text){
+  // Las boletas chilenas siempre traen una fecha fija de resolución del SII
+  // (ej. "Res. 80 de 22-08-2014") que NO es la fecha de la compra — hay que
+  // ignorarla. Estrategia: excluir líneas de resolución, preferir líneas que
+  // digan "Fecha"/"Emisión", y si hay varias fechas válidas, quedarnos con
+  // la más reciente (la fecha de compra siempre es más nueva que la de
+  // una resolución legal fija).
+  const rxFecha = /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/g;
+  const lineas = text.split('\n');
+  const candidatos = [];
   const hoy = new Date();
-  if(Number(y) > hoy.getFullYear() + 1) return null;
-  return `${y}-${mo}-${d}`;
+
+  lineas.forEach(linea => {
+    if(/RES\.?\s*\d|RESOLUCI/i.test(linea)) return; // línea de resolución SII, se descarta
+    let m;
+    rxFecha.lastIndex = 0;
+    while((m = rxFecha.exec(linea)) !== null){
+      let [, d, mo, y] = m;
+      if(y.length === 2) y = '20' + y;
+      d = d.padStart(2,'0'); mo = mo.padStart(2,'0');
+      if(Number(mo) > 12 || Number(mo) < 1 || Number(d) > 31 || Number(d) < 1) continue;
+      if(Number(y) > hoy.getFullYear() + 1) continue;
+      candidatos.push({
+        fechaStr: `${y}-${mo}-${d}`,
+        etiquetada: /FECHA|EMISI/i.test(linea)
+      });
+    }
+  });
+
+  if(candidatos.length === 0) return null;
+  const etiquetadas = candidatos.filter(c => c.etiquetada);
+  const pool = etiquetadas.length ? etiquetadas : candidatos;
+  pool.sort((a,b) => b.fechaStr.localeCompare(a.fechaStr)); // más reciente primero
+  return pool[0].fechaStr;
 }
 
 function validar(){
@@ -379,6 +417,7 @@ async function enviarRendicion(){
     motivo: document.getElementById('f-motivo').value.trim(),
     fecha: document.getElementById('f-fecha').value,
     monto: Number(document.getElementById('f-monto').value),
+    folio: document.getElementById('f-folio').value.trim() || null,
     centro_costo: document.getElementById('f-centro').value,
     fotosDataUrls: fotos.map(f => f.dataUrl),
     fotoNames: fotos.map(f => f.file.name)
@@ -415,6 +454,7 @@ async function subirYGuardar(payload){
     motivo: payload.motivo,
     fecha: payload.fecha,
     monto: payload.monto,
+    folio: payload.folio,
     centro_costo: payload.centro_costo,
     foto_urls: urls,
     estado: 'pendiente'
@@ -470,6 +510,7 @@ function nuevaRendicion(){
   renderFotos();
   document.getElementById('f-motivo').value = '';
   document.getElementById('f-monto').value = '';
+  document.getElementById('f-folio').value = '';
   document.getElementById('f-centro').value = '';
   document.getElementById('f-resp-rendicion').value = '';
   document.getElementById('f-fecha').value = new Date().toISOString().slice(0,10);
@@ -505,13 +546,17 @@ async function cargarFondos(){
 async function cargarResponsablesRendicion(){
   const sel = document.getElementById('f-resp-rendicion');
   try{
-    const res = await fetch(`${SB_URL}/rest/v1/cuentas_responsables?select=nombre&activo=eq.true&order=nombre.asc`, {headers:H});
-    const cuentas = await res.json();
-    const opciones = [...cuentas.map(c=>c.nombre), ...TECNICOS_FIJOS];
+    const [resCuentas, resUsuarios] = await Promise.all([
+      fetch(`${SB_URL}/rest/v1/cuentas_responsables?select=nombre&activo=eq.true&order=nombre.asc`, {headers:H}),
+      fetch(`${SB_URL}/rest/v1/usuarios?select=nombre&activo=eq.true&order=nombre.asc`, {headers:H})
+    ]);
+    const cuentas = await resCuentas.json();
+    const usuarios = await resUsuarios.json();
+    const opciones = [...new Set([...cuentas.map(c=>c.nombre), ...usuarios.map(u=>u.nombre)])];
     sel.innerHTML = '<option value="">Selecciona...</option>' + opciones.map(n=>`<option>${n}</option>`).join('');
   }catch(e){
     console.error(e);
-    sel.innerHTML = '<option value="">Selecciona...</option>' + TECNICOS_FIJOS.map(n=>`<option>${n}</option>`).join('');
+    sel.innerHTML = '<option value="">No se pudo cargar — reintenta con conexión</option>';
   }
 }
 

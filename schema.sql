@@ -16,7 +16,7 @@ create table if not exists public.rendiciones (
   centro_costo        text not null,
   foto_urls           text[] not null default '{}',
   proveedor           text,            -- lo completa Claude leyendo la foto
-  folio               text,            -- lo completa Claude leyendo la foto
+  folio               text,            -- N° de boleta: lo detecta el OCR en terreno, el técnico lo valida, y Claude lo revisa al consolidar
   categoria           text,            -- lo completa Claude leyendo la foto
   periodo             text,            -- ej: '2026-07', se asigna al consolidar
   estado              text not null default 'pendiente', -- 'pendiente' | 'procesado'
@@ -92,6 +92,42 @@ insert into public.cuentas_responsables (nombre, activo) values
   ('Eduardo M.', true),
   ('Yerko P.', true),
   ('Nicolás R.', true)
+on conflict (nombre) do nothing;
+
+-- 2b) Usuarios (técnicos u otras personas que pueden figurar como
+-- Responsable Rendición además de los Responsables del Fondo). Editable
+-- desde el panel admin, pestaña "Usuarios".
+create table if not exists public.usuarios (
+  id      bigint generated always as identity primary key,
+  nombre  text not null unique,
+  activo  boolean not null default true
+);
+
+alter table public.usuarios enable row level security;
+
+drop policy if exists "usuarios_select_anon" on public.usuarios;
+create policy "usuarios_select_anon"
+  on public.usuarios for select
+  to anon
+  using (true);
+
+drop policy if exists "usuarios_insert_anon" on public.usuarios;
+create policy "usuarios_insert_anon"
+  on public.usuarios for insert
+  to anon
+  with check (true);
+
+drop policy if exists "usuarios_update_anon" on public.usuarios;
+create policy "usuarios_update_anon"
+  on public.usuarios for update
+  to anon
+  using (true)
+  with check (true);
+
+insert into public.usuarios (nombre, activo) values
+  ('Jorge C.', true),
+  ('Demis S.', true),
+  ('No Aplica', true)
 on conflict (nombre) do nothing;
 
 -- 3) Bucket de Storage para las fotos de boletas

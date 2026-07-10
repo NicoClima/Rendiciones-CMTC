@@ -46,6 +46,15 @@ body{font-family:var(--font);background:#e0e0dc;min-height:100vh;padding:20px;di
 .cuenta-nombre.inactivo{color:var(--text3);text-decoration:line-through;}
 .add-row{display:flex;gap:8px;margin:14px 0;}
 .add-row input{flex:1;padding:9px 11px;border-radius:var(--radius-sm);border:0.5px solid var(--gray3);font-family:var(--font);font-size:13px;}
+.export-panel{background:var(--teal-light);border:0.5px solid var(--teal-mid);border-radius:var(--radius-sm);padding:14px;margin-bottom:14px;}
+.export-title{font-size:12px;font-weight:600;color:var(--teal-dark);margin-bottom:10px;}
+.export-row{display:flex;gap:8px;flex-wrap:wrap;}
+.btn-export{padding:9px 14px;border-radius:8px;border:none;background:var(--teal);color:#fff;font-weight:600;font-size:12px;cursor:pointer;font-family:var(--font);}
+.btn-export:hover{background:var(--teal-dark);}
+.btn-export:disabled{background:var(--teal-mid);cursor:default;}
+.btn-marcar{background:var(--purple-dark);}
+.btn-marcar:hover{background:#2b255f;}
+.export-row input[type="text"]{padding:9px 11px;border-radius:8px;border:0.5px solid var(--gray3);font-family:var(--font);font-size:12px;}
 .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:16px 0;}
 .dash-metric{background:var(--gray);border-radius:var(--radius-sm);padding:12px;border:0.5px solid var(--gray2);text-align:center;}
 .dash-val{font-size:22px;font-weight:600;font-family:var(--font-mono);color:var(--text);}
@@ -101,6 +110,7 @@ body{font-family:var(--font);background:#e0e0dc;min-height:100vh;padding:20px;di
       <div class="admin-tabs">
         <div class="admin-tab active" id="tabbtn-rendiciones" onclick="cambiarTab('rendiciones')">📋 Rendiciones</div>
         <div class="admin-tab" id="tabbtn-cuentas" onclick="cambiarTab('cuentas')">💳 Responsables del Fondo</div>
+        <div class="admin-tab" id="tabbtn-usuarios" onclick="cambiarTab('usuarios')">👤 Usuarios</div>
       </div>
 
       <div class="tab-content active" id="tab-rendiciones">
@@ -120,7 +130,22 @@ body{font-family:var(--font);background:#e0e0dc;min-height:100vh;padding:20px;di
             <option value="procesado">Procesado</option>
           </select>
           <input type="text" id="f-periodo" placeholder="Período (ej: 2026-07)" oninput="render()">
+          <label style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:4px;">Desde <input type="date" id="f-desde" onchange="render()"></label>
+          <label style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:4px;">Hasta <input type="date" id="f-hasta" onchange="render()"></label>
           <button onclick="cargar()" style="padding:8px 14px;border-radius:8px;border:none;background:var(--teal);color:#fff;font-weight:600;font-size:12px;cursor:pointer;">↻ Recargar</button>
+        </div>
+
+        <div class="export-panel">
+          <div class="export-title">📥 Generar archivos de la selección actual (<span id="export-count">0</span> rendiciones, <span id="export-monto">$0</span>)</div>
+          <div class="export-row">
+            <button class="btn-export" id="btn-excel" onclick="descargarExcel()">📊 Descargar Excel</button>
+            <button class="btn-export" id="btn-pdf" onclick="descargarPDF()">📄 Descargar PDF con boletas</button>
+          </div>
+          <div class="export-row" style="margin-top:8px;">
+            <input type="text" id="periodo-marcar" placeholder="Período a asignar (ej: 2026-07)" style="flex:1;">
+            <button class="btn-export btn-marcar" id="btn-marcar" onclick="marcarProcesadas()">✅ Marcar selección como procesada</button>
+          </div>
+          <div class="hint" style="margin-top:6px;">Estos botones usan exactamente los filtros de arriba (técnico, fondo, estado, período, rango de fechas). Ajusta los filtros antes de generar o marcar.</div>
         </div>
 
         <div id="lista"></div>
@@ -132,9 +157,20 @@ body{font-family:var(--font);background:#e0e0dc;min-height:100vh;padding:20px;di
         </div>
         <div class="add-row">
           <input type="text" id="nueva-cuenta" placeholder="Nombre del nuevo responsable">
-          <button style="background:var(--purple-dark);padding:0 16px;border-radius:8px;border:none;color:#fff;font-weight:600;cursor:pointer;" onclick="agregarCuenta()">+ Agregar</button>
+          <button style="background:var(--purple-dark);padding:0 16px;border-radius:8px;border:none;color:#fff;font-weight:600;cursor:pointer;" onclick="agregarItem('cuentas_responsables','nueva-cuenta','lista-cuentas')">+ Agregar</button>
         </div>
         <div id="lista-cuentas"></div>
+      </div>
+
+      <div class="tab-content" id="tab-usuarios">
+        <div class="hint" style="margin:12px 0;color:var(--text2);font-size:12px;">
+          Estos son los usuarios (técnicos u otras personas) que pueden figurar como Responsable Rendición, además de los Responsables del Fondo. Desactivar uno no borra las rendiciones ya registradas con él.
+        </div>
+        <div class="add-row">
+          <input type="text" id="nuevo-usuario" placeholder="Nombre del nuevo usuario">
+          <button style="background:var(--purple-dark);padding:0 16px;border-radius:8px;border:none;color:#fff;font-weight:600;cursor:pointer;" onclick="agregarItem('usuarios','nuevo-usuario','lista-usuarios')">+ Agregar</button>
+        </div>
+        <div id="lista-usuarios"></div>
       </div>
 
     </div>
@@ -148,6 +184,9 @@ body{font-family:var(--font);background:#e0e0dc;min-height:100vh;padding:20px;di
   </div>
 </div>
 
+<!-- Generación de Excel y PDF, ambas 100% en el navegador (sin backend) -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script>
 // ============================================================
 // CONFIG — mismo proyecto Supabase que index.html
@@ -168,7 +207,8 @@ function login(){
     document.getElementById('login-box').style.display = 'none';
     document.getElementById('panel').classList.add('show');
     cargar();
-    cargarCuentasAdmin();
+    cargarListaAdmin('cuentas_responsables', 'lista-cuentas');
+    cargarListaAdmin('usuarios', 'lista-usuarios');
   } else {
     document.getElementById('login-err').classList.add('show');
   }
@@ -193,56 +233,63 @@ async function cargar(){
   render();
 }
 
-// ── Gestión de Responsables del Fondo ─────────────────────
-async function cargarCuentasAdmin(){
-  const res = await fetch(`${SB_URL}/rest/v1/cuentas_responsables?select=*&order=nombre.asc`, {headers:H});
-  const cuentas = await res.json();
-  const cont = document.getElementById('lista-cuentas');
-  if(cuentas.length === 0){
-    cont.innerHTML = '<div class="empty-sm">No hay responsables registrados</div>';
+// ── Gestión de Responsables del Fondo / Usuarios (genérico) ──
+async function cargarListaAdmin(tabla, contenedorId){
+  const res = await fetch(`${SB_URL}/rest/v1/${tabla}?select=*&order=nombre.asc`, {headers:H});
+  const items = await res.json();
+  const cont = document.getElementById(contenedorId);
+  if(items.length === 0){
+    cont.innerHTML = '<div class="empty-sm">No hay registros</div>';
     return;
   }
-  cont.innerHTML = cuentas.map(c => `
+  cont.innerHTML = items.map(c => `
     <div class="cuenta-row">
       <span class="cuenta-nombre ${c.activo?'':'inactivo'}">${c.nombre}</span>
       <span class="pill ${c.activo?'pill-procesado':'pill-pendiente'}">${c.activo?'activo':'inactivo'}</span>
-      <button style="padding:6px 10px;border-radius:8px;border:0.5px solid var(--gray3);background:var(--white);color:var(--text2);font-size:12px;cursor:pointer;" onclick="toggleCuenta(${c.id}, ${!c.activo})">${c.activo?'Desactivar':'Activar'}</button>
+      <button style="padding:6px 10px;border-radius:8px;border:0.5px solid var(--gray3);background:var(--white);color:var(--text2);font-size:12px;cursor:pointer;" onclick="toggleItem('${tabla}', ${c.id}, ${!c.activo}, '${contenedorId}')">${c.activo?'Desactivar':'Activar'}</button>
     </div>`).join('');
 }
 
-async function agregarCuenta(){
-  const input = document.getElementById('nueva-cuenta');
+async function agregarItem(tabla, inputId, contenedorId){
+  const input = document.getElementById(inputId);
   const nombre = input.value.trim();
   if(!nombre) return;
-  await fetch(`${SB_URL}/rest/v1/cuentas_responsables`, {
+  await fetch(`${SB_URL}/rest/v1/${tabla}`, {
     method:'POST', headers:{...H,'Prefer':'return=representation'},
     body: JSON.stringify({nombre, activo:true})
   });
   input.value = '';
-  cargarCuentasAdmin();
+  cargarListaAdmin(tabla, contenedorId);
 }
 
-async function toggleCuenta(id, nuevoEstado){
-  await fetch(`${SB_URL}/rest/v1/cuentas_responsables?id=eq.${id}`, {
+async function toggleItem(tabla, id, nuevoEstado, contenedorId){
+  await fetch(`${SB_URL}/rest/v1/${tabla}?id=eq.${id}`, {
     method:'PATCH', headers:{...H,'Prefer':'return=representation'},
     body: JSON.stringify({activo: nuevoEstado})
   });
-  cargarCuentasAdmin();
+  cargarListaAdmin(tabla, contenedorId);
 }
 
 function fmtMonto(n){ return '$' + Number(n).toLocaleString('es-CL'); }
+
+let filtradosActuales = [];
 
 function render(){
   const fr = document.getElementById('f-resp-rendicion').value;
   const ff = document.getElementById('f-fondo').value;
   const fe = document.getElementById('f-estado').value;
   const fp = document.getElementById('f-periodo').value.trim();
+  const fd = document.getElementById('f-desde').value;
+  const fh = document.getElementById('f-hasta').value;
   const filtrados = registros.filter(r =>
     (!fr || r.responsable_rendicion===fr) &&
     (!ff || r.cuenta_responsable===ff) &&
     (!fe || r.estado===fe) &&
-    (!fp || (r.periodo||'').includes(fp))
+    (!fp || (r.periodo||'').includes(fp)) &&
+    (!fd || r.fecha >= fd) &&
+    (!fh || r.fecha <= fh)
   );
+  filtradosActuales = filtrados;
 
   const pend = registros.filter(r=>r.estado==='pendiente');
   const proc = registros.filter(r=>r.estado==='procesado');
@@ -250,6 +297,9 @@ function render(){
   document.getElementById('m-monto-pend').textContent = fmtMonto(pend.reduce((s,r)=>s+Number(r.monto||0),0));
   document.getElementById('m-proc').textContent = proc.length;
   document.getElementById('m-total').textContent = registros.length;
+
+  document.getElementById('export-count').textContent = filtrados.length;
+  document.getElementById('export-monto').textContent = fmtMonto(filtrados.reduce((s,r)=>s+Number(r.monto||0),0));
 
   const lista = document.getElementById('lista');
   if(filtrados.length === 0){
@@ -261,7 +311,7 @@ function render(){
       <img class="tbl-thumb" src="${(r.foto_urls&&r.foto_urls[0])||''}" onerror="this.style.opacity=0">
       <div class="tbl-main">
         <div class="tbl-motivo">${r.motivo}</div>
-        <div class="tbl-meta">${r.responsable_rendicion} · ${r.fecha} · ${r.centro_costo} · fondo: ${r.cuenta_responsable||'—'}</div>
+        <div class="tbl-meta">${r.responsable_rendicion} · ${r.fecha} · ${r.centro_costo} · fondo: ${r.cuenta_responsable||'—'}${r.folio?' · folio: '+r.folio:''}</div>
       </div>
       <div class="tbl-monto">${fmtMonto(r.monto)}</div>
       <span class="pill pill-${r.estado}">${r.estado}</span>
@@ -290,6 +340,135 @@ function verDetalle(id){
 }
 
 function cerrarModal(){ document.getElementById('modal').classList.remove('show'); }
+
+// ── Exportar Excel (SheetJS, corre en el navegador) ──────────
+function descargarExcel(){
+  if(filtradosActuales.length === 0){ alert('No hay rendiciones para exportar con estos filtros.'); return; }
+  const filas = filtradosActuales.map(r => ({
+    'Fecha': r.fecha,
+    'Motivo': r.motivo,
+    'Monto': Number(r.monto),
+    'Centro de Costo': r.centro_costo,
+    'Responsable Rendición': r.responsable_rendicion,
+    'Responsable del Fondo': r.cuenta_responsable || '',
+    'Proveedor': r.proveedor || '',
+    'N° Folio': r.folio || '',
+    'Categoría': r.categoria || '',
+    'Período': r.periodo || '',
+    'Estado': r.estado,
+    'Notas de Verificación': r.notas_verificacion || ''
+  }));
+  const total = filtradosActuales.reduce((s,r)=>s+Number(r.monto||0),0);
+  filas.push({});
+  filas.push({'Fecha':'', 'Motivo':'TOTAL', 'Monto': total});
+  const ws = XLSX.utils.json_to_sheet(filas);
+  ws['!cols'] = [{wch:12},{wch:32},{wch:12},{wch:16},{wch:18},{wch:18},{wch:22},{wch:14},{wch:16},{wch:10},{wch:12},{wch:32}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Rendiciones');
+  XLSX.writeFile(wb, `rendiciones_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ── Exportar PDF con las fotos de cada boleta (jsPDF) ─────────
+function cargarImagenComoDataURL(url){
+  return fetch(url)
+    .then(res => res.blob())
+    .then(blob => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    }));
+}
+
+async function descargarPDF(){
+  if(filtradosActuales.length === 0){ alert('No hay rendiciones para exportar con estos filtros.'); return; }
+  const btn = document.getElementById('btn-pdf');
+  const textoOriginal = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Generando PDF...';
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({unit:'pt', format:'a4'});
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 32;
+
+    doc.setFontSize(16);
+    doc.text('Rendición de Gastos — Boletas y Vouchers', margin, 50);
+    doc.setFontSize(10);
+    doc.text(`Generado: ${new Date().toLocaleString('es-CL')}`, margin, 68);
+    doc.text(`Registros: ${filtradosActuales.length}    Monto total: ${fmtMonto(filtradosActuales.reduce((s,r)=>s+Number(r.monto||0),0))}`, margin, 84);
+
+    let y = 110;
+    doc.setFontSize(9);
+    filtradosActuales.forEach((r,i) => {
+      if(y > pageH - 60){ doc.addPage(); y = 50; }
+      const linea = `${i+1}. ${r.fecha} · ${r.motivo} · ${fmtMonto(r.monto)} · ${r.responsable_rendicion} · ${r.centro_costo}${r.folio?' · Folio: '+r.folio:''}`;
+      doc.text(linea, margin, y);
+      y += 14;
+    });
+
+    for(const r of filtradosActuales){
+      const urls = r.foto_urls || [];
+      for(let i=0;i<urls.length;i++){
+        doc.addPage();
+        doc.setFontSize(11);
+        doc.text(`${r.fecha}  ·  ${r.responsable_rendicion}  ·  ${fmtMonto(r.monto)}`, margin, 40);
+        doc.setFontSize(9);
+        doc.text(`Motivo: ${r.motivo}`, margin, 56);
+        doc.text(`Centro de Costo: ${r.centro_costo}   Fondo: ${r.cuenta_responsable||'—'}${r.folio?'   Folio: '+r.folio:''}`, margin, 70);
+        try{
+          const dataUrl = await cargarImagenComoDataURL(urls[i]);
+          const img = new Image();
+          await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = dataUrl; });
+          const maxW = pageW - margin*2;
+          const maxH = pageH - 100;
+          let w = img.width, h = img.height;
+          const ratio = Math.min(maxW/w, maxH/h, 1);
+          w *= ratio; h *= ratio;
+          const x = (pageW - w)/2;
+          const mime = dataUrl.substring(5, dataUrl.indexOf(';'));
+          const formato = mime.includes('png') ? 'PNG' : 'JPEG';
+          doc.addImage(dataUrl, formato, x, 90, w, h);
+        }catch(e){
+          console.error(e);
+          doc.text('(No se pudo cargar la foto de esta boleta — revisa tu conexión)', margin, 100);
+        }
+      }
+    }
+
+    doc.save(`rendiciones_${new Date().toISOString().slice(0,10)}.pdf`);
+  }catch(e){
+    console.error(e);
+    alert('Ocurrió un error generando el PDF. Revisa la consola del navegador para más detalle.');
+  }
+  btn.disabled = false;
+  btn.textContent = textoOriginal;
+}
+
+// ── Marcar la selección filtrada como procesada ───────────────
+async function marcarProcesadas(){
+  if(filtradosActuales.length === 0){ alert('No hay rendiciones para marcar con estos filtros.'); return; }
+  const periodo = document.getElementById('periodo-marcar').value.trim();
+  if(!periodo){ alert('Escribe el período a asignar (ej: 2026-07) antes de marcar.'); return; }
+  const pendientesSel = filtradosActuales.filter(r => r.estado !== 'procesado');
+  if(pendientesSel.length === 0){ alert('Todas las rendiciones filtradas ya están procesadas.'); return; }
+  if(!confirm(`¿Marcar ${pendientesSel.length} rendición(es) como procesada(s) con período "${periodo}"?`)) return;
+  const btn = document.getElementById('btn-marcar');
+  const textoOriginal = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Marcando...';
+  for(const r of pendientesSel){
+    await fetch(`${SB_URL}/rest/v1/rendiciones?id=eq.${r.id}`, {
+      method:'PATCH', headers:{...H,'Prefer':'return=representation'},
+      body: JSON.stringify({estado:'procesado', periodo})
+    });
+  }
+  btn.disabled = false;
+  btn.textContent = textoOriginal;
+  alert('Listo, rendiciones marcadas como procesadas.');
+  cargar();
+}
 </script>
 </body>
 </html>
