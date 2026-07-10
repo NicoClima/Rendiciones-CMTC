@@ -8,8 +8,8 @@
 -- 1) Tabla principal
 create table if not exists public.rendiciones (
   id                  bigint generated always as identity primary key,
-  tecnico             text not null,
-  cuenta_responsable  text not null,  -- cuenta con la que se pagó
+  cuenta_responsable  text not null,  -- Responsable del Fondo: Yerko P. / Eduardo M. / Nicolás R.
+  responsable_rendicion text not null, -- quién hizo la compra: puede ser el mismo del fondo u otro (técnico)
   motivo              text not null,
   fecha               date not null,
   monto               numeric not null,
@@ -24,9 +24,18 @@ create table if not exists public.rendiciones (
   created_at          timestamptz not null default now()
 );
 
--- Por si la tabla ya existía de una corrida anterior sin esta columna
-alter table public.rendiciones
-  add column if not exists cuenta_responsable text;
+-- Migraciones por si la tabla ya existía de una corrida anterior
+alter table public.rendiciones add column if not exists cuenta_responsable text;
+alter table public.rendiciones add column if not exists responsable_rendicion text;
+
+-- Si existe la columna vieja "tecnico" y todavía no se migró, la traspasamos
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_schema='public' and table_name='rendiciones' and column_name='tecnico') then
+    update public.rendiciones set responsable_rendicion = tecnico where responsable_rendicion is null;
+    alter table public.rendiciones drop column tecnico;
+  end if;
+end $$;
 
 alter table public.rendiciones enable row level security;
 
@@ -51,7 +60,7 @@ create policy "rendiciones_update_anon"
   using (true)
   with check (true);
 
--- 2) Cuentas responsables (editable desde el panel admin, pestaña "Cuentas")
+-- 2) Responsables del Fondo (editable desde el panel admin, pestaña "Responsables del Fondo")
 create table if not exists public.cuentas_responsables (
   id      bigint generated always as identity primary key,
   nombre  text not null unique,
@@ -104,10 +113,14 @@ create policy "boletas_anon_upload"
 
 -- ============================================================
 -- Notas:
--- - El bucket queda público de lectura para poder mostrar las fotos
---   en el panel admin y para que Claude pueda leerlas al consolidar.
---   Si las boletas tienen datos sensibles (ej. RUT visible) y prefieres
---   que no sean públicas, avísame y cambiamos a bucket privado + URLs firmadas.
+-- - "cuenta_responsable" = Responsable del Fondo (Yerko/Eduardo/Nicolás), se
+--   elige al entrar a la app y se administra en admin.html.
+-- - "responsable_rendicion" = quién hizo la compra específica: puede ser el
+--   mismo Responsable del Fondo, o un técnico (Jorge C., Demis S., No Aplica).
+-- - El bucket queda público de lectura para poder mostrar las fotos en el
+--   panel admin y para que Claude pueda leerlas al consolidar. Si las
+--   boletas muestran datos sensibles y prefieres que no sean públicas,
+--   avísame y cambiamos a bucket privado + URLs firmadas.
 -- - No se agregó política de DELETE a propósito (nadie puede borrar
 --   registros por accidente desde la app).
 -- ============================================================

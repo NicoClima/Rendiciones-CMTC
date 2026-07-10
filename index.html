@@ -71,7 +71,7 @@ body{font-family:var(--font);background:#e0e0dc;display:flex;align-items:flex-st
 .enviado-icon{font-size:56px;margin-bottom:12px;}
 .enviado-title{font-size:20px;font-weight:600;color:var(--teal-dark);margin-bottom:6px;}
 .enviado-msg{font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:20px;}
-.tecnico-tag{display:inline-flex;align-items:center;gap:6px;background:var(--teal-light);color:var(--teal-dark);font-size:11px;font-weight:600;padding:4px 10px;border-radius:10px;cursor:pointer;}
+.fondo-tag{display:inline-flex;align-items:center;gap:6px;background:var(--teal-light);color:var(--teal-dark);font-size:11px;font-weight:600;padding:4px 10px;border-radius:10px;cursor:pointer;}
 </style>
 </head>
 <body>
@@ -81,23 +81,20 @@ body{font-family:var(--font);background:#e0e0dc;display:flex;align-items:flex-st
 
 <div class="phone">
 
-  <!-- STEP 0: técnico -->
+  <!-- STEP 0: Responsable del Fondo -->
   <div class="step active" id="step-0">
     <div class="topbar">
       <div class="topbar-row"><div class="top-title">Rendiciones · Boletas y Vouchers</div></div>
     </div>
     <div class="step-body">
       <div class="welcome-icon">🧾</div>
-      <div class="welcome-title">¿Quién eres?</div>
-      <div class="welcome-sub">Registra tu compra con boleta o voucher en menos de un minuto</div>
+      <div class="welcome-title">Responsable del Fondo</div>
+      <div class="welcome-sub">Selecciona el fondo con el que se pagará, para comenzar</div>
       <div class="card"><div class="card-body">
         <div class="field">
-          <label>Técnico *</label>
-          <select id="sel-tecnico" onchange="onTecnicoChange()">
-            <option value="">Selecciona tu nombre...</option>
-            <option>Jorge C.</option>
-            <option>Demis S.</option>
-            <option>No Aplica</option>
+          <label>Responsable del Fondo *</label>
+          <select id="sel-fondo" onchange="onFondoChange()">
+            <option value="">Cargando...</option>
           </select>
         </div>
       </div></div>
@@ -107,19 +104,47 @@ body{font-family:var(--font);background:#e0e0dc;display:flex;align-items:flex-st
     </div>
   </div>
 
-  <!-- STEP 1: formulario -->
+  <!-- STEP 1: Foto de la boleta -->
   <div class="step" id="step-1">
     <div class="topbar">
       <div class="topbar-row">
-        <button class="back-btn" onclick="cambiarTecnico()">← Cambiar</button>
-        <div class="top-title">Nueva rendición</div>
+        <button class="back-btn" onclick="cambiarFondo()">← Cambiar</button>
+        <div class="top-title">Foto de la boleta</div>
       </div>
       <div class="dots"><div class="dot active"></div><div class="dot"></div></div>
     </div>
     <div class="step-body">
-      <span class="tecnico-tag" onclick="cambiarTecnico()" id="tecnico-tag">👤 —</span>
+      <span class="fondo-tag" onclick="cambiarFondo()" id="fondo-tag">👤 —</span>
       <div class="card" style="margin-top:12px"><div class="card-body">
-        <div class="slabel">Datos mínimos</div>
+        <div class="slabel">Foto de la boleta *</div>
+        <button class="foto-add-btn" onclick="document.getElementById('foto-camera').click()">📷 Tomar foto</button>
+        <button class="foto-add-btn" onclick="document.getElementById('foto-galeria').click()">🖼️ Elegir de galería</button>
+        <input type="file" id="foto-camera" accept="image/*" capture="environment" style="display:none" onchange="onFotoSel(event)">
+        <input type="file" id="foto-galeria" accept="image/*" multiple style="display:none" onchange="onFotoSel(event)">
+        <div class="hint">Toma la foto primero — intentamos leer la fecha y el monto automáticamente para que solo tengas que confirmarlos en el siguiente paso.</div>
+        <div class="foto-grid" id="foto-grid"></div>
+        <div class="alerta" id="ocr-status" style="margin-top:8px"></div>
+      </div></div>
+      <div class="alerta" id="alerta-sin-foto">⚠️ <span>Agrega al menos una foto de la boleta para continuar.</span></div>
+    </div>
+    <div class="step-footer">
+      <button class="btn-prev" onclick="goStep(0)">←</button>
+      <button class="btn-next" id="btn-continuar-s1" onclick="irADatos()">Continuar →</button>
+    </div>
+  </div>
+
+  <!-- STEP 2: Datos de la rendición -->
+  <div class="step" id="step-2">
+    <div class="topbar">
+      <div class="topbar-row">
+        <button class="back-btn" onclick="goStep(1)">←</button>
+        <div class="top-title">Completa los datos</div>
+      </div>
+      <div class="dots"><div class="dot done"></div><div class="dot active"></div></div>
+    </div>
+    <div class="step-body">
+      <div class="card"><div class="card-body">
+        <div class="slabel">Revisa y completa</div>
         <div class="field">
           <label>Motivo *</label>
           <input type="text" id="f-motivo" placeholder="Ej: Bencina camioneta, insumos, almuerzo terreno...">
@@ -145,35 +170,23 @@ body{font-family:var(--font);background:#e0e0dc;display:flex;align-items:flex-st
           <div class="hint">¿Falta tu proyecto? Avísale a Admin para agregarlo a la lista.</div>
         </div>
         <div class="field">
-          <label>Cuenta Responsable *</label>
-          <select id="f-cuenta">
+          <label>Responsable Rendición *</label>
+          <select id="f-resp-rendicion">
             <option value="">Cargando...</option>
           </select>
-          <div class="hint">Cuenta con la que se pagó la compra.</div>
+          <div class="hint">Quién realizó la compra — puede ser el mismo Responsable del Fondo u otra persona (ej. un técnico).</div>
         </div>
       </div></div>
-
-      <div class="card"><div class="card-body">
-        <div class="slabel">Foto de la boleta *</div>
-        <button class="foto-add-btn" onclick="document.getElementById('foto-camera').click()">📷 Tomar foto</button>
-        <button class="foto-add-btn" onclick="document.getElementById('foto-galeria').click()">🖼️ Elegir de galería</button>
-        <input type="file" id="foto-camera" accept="image/*" capture="environment" style="display:none" onchange="onFotoSel(event)">
-        <input type="file" id="foto-galeria" accept="image/*" multiple style="display:none" onchange="onFotoSel(event)">
-        <div class="hint">No necesitas llenar proveedor, N° folio ni categoría — eso lo completamos automáticamente leyendo la foto.</div>
-        <div class="foto-grid" id="foto-grid"></div>
-        <div class="alerta" id="ocr-status" style="margin-top:8px"></div>
-      </div></div>
-
-      <div class="alerta" id="alerta-incompleto">⚠️ <span>Completa motivo, fecha, monto, centro de costo y al menos una foto.</span></div>
+      <div class="alerta" id="alerta-incompleto">⚠️ <span>Completa motivo, fecha, monto, centro de costo y responsable de rendición.</span></div>
     </div>
     <div class="step-footer">
-      <button class="btn-prev" onclick="goStep(0)">←</button>
+      <button class="btn-prev" onclick="goStep(1)">←</button>
       <button class="btn-next" id="btn-enviar" onclick="enviarRendicion()">Enviar rendición →</button>
     </div>
   </div>
 
-  <!-- STEP 2: confirmación -->
-  <div class="step" id="step-2">
+  <!-- STEP 3: confirmación -->
+  <div class="step" id="step-3">
     <div class="topbar"><div class="topbar-row"><div class="top-title">Rendiciones</div></div></div>
     <div class="enviado-wrap">
       <div class="pending-badge" id="pending-badge" onclick="flushPendientes()">0 pendientes por enviar — toca para reintentar</div>
@@ -197,19 +210,23 @@ const SB_URL = 'https://badqakfrggfyseobcqvn.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhZHFha2ZyZ2dmeXNlb2JjcXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3MTAyODYsImV4cCI6MjA5OTI4NjI4Nn0.UFd85reDPFCAaXnb6d06UgWrWs9jt9L1KhP6bl98Nfg';
 const H = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Accept':'application/json'};
 
+// Técnicos que pueden figurar como Responsable Rendición además de los
+// Responsables del Fondo (que se cargan dinámicamente desde Supabase).
+const TECNICOS_FIJOS = ['Jorge C.', 'Demis S.', 'No Aplica'];
+
 let fotos = []; // {file, dataUrl}
 
-function getTecnico(){
-  return document.getElementById('sel-tecnico').value;
+function getResponsableFondo(){
+  return document.getElementById('sel-fondo').value;
 }
 
-function onTecnicoChange(){
-  const t = getTecnico();
-  document.getElementById('btn-continuar-s0').disabled = !t;
-  if(t) localStorage.setItem('rnd_tecnico_sel', t);
+function onFondoChange(){
+  const v = getResponsableFondo();
+  document.getElementById('btn-continuar-s0').disabled = !v;
+  if(v) localStorage.setItem('rnd_fondo_sel', v);
 }
 
-function cambiarTecnico(){
+function cambiarFondo(){
   goStep(0);
 }
 
@@ -217,11 +234,22 @@ function goStep(n){
   document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
   document.getElementById('step-' + n).classList.add('active');
   if(n === 1){
-    document.getElementById('tecnico-tag').textContent = '👤 ' + getTecnico();
+    document.getElementById('fondo-tag').textContent = '👤 ' + getResponsableFondo();
+  }
+  if(n === 2){
     if(!document.getElementById('f-fecha').value){
       document.getElementById('f-fecha').value = new Date().toISOString().slice(0,10);
     }
   }
+}
+
+function irADatos(){
+  if(fotos.length === 0){
+    document.getElementById('alerta-sin-foto').classList.add('show');
+    return;
+  }
+  document.getElementById('alerta-sin-foto').classList.remove('show');
+  goStep(2);
 }
 
 function onFotoSel(ev){
@@ -242,6 +270,17 @@ function onFotoSel(ev){
   });
   ev.target.value = '';
 }
+
+function renderFotos(){
+  const grid = document.getElementById('foto-grid');
+  grid.innerHTML = fotos.map((f,i) => `
+    <div class="foto-thumb">
+      <img src="${f.dataUrl}">
+      <button class="foto-del" onclick="delFoto(${i})">✕</button>
+    </div>`).join('');
+}
+
+function delFoto(i){ fotos.splice(i,1); renderFotos(); }
 
 // ── Lectura automática de la boleta (OCR en el navegador, gratis) ──
 let ocrEnCurso = false;
@@ -264,13 +303,13 @@ async function leerBoleta(dataUrl){
     if(monto){ document.getElementById('f-monto').value = monto; detectado.push('el monto'); }
     if(fecha){ document.getElementById('f-fecha').value = fecha; detectado.push('la fecha'); }
     if(detectado.length){
-      mostrarOcrEstado(`Detectamos ${detectado.join(' y ')} automáticamente — revisa que estén correctos antes de enviar.`, false);
+      mostrarOcrEstado(`Detectamos ${detectado.join(' y ')} automáticamente — revisa que estén correctos en el siguiente paso.`, false);
     } else {
-      mostrarOcrEstado('No logramos leer la boleta automáticamente, completa los datos a mano.', false);
+      mostrarOcrEstado('No logramos leer la boleta automáticamente, completa los datos a mano en el siguiente paso.', false);
     }
   }catch(e){
     console.error(e);
-    mostrarOcrEstado('No logramos leer la boleta automáticamente, completa los datos a mano.', false);
+    mostrarOcrEstado('No logramos leer la boleta automáticamente, completa los datos a mano en el siguiente paso.', false);
   }
   ocrEnCurso = false;
 }
@@ -316,24 +355,13 @@ function extraerFecha(text){
   return `${y}-${mo}-${d}`;
 }
 
-function renderFotos(){
-  const grid = document.getElementById('foto-grid');
-  grid.innerHTML = fotos.map((f,i) => `
-    <div class="foto-thumb">
-      <img src="${f.dataUrl}">
-      <button class="foto-del" onclick="delFoto(${i})">✕</button>
-    </div>`).join('');
-}
-
-function delFoto(i){ fotos.splice(i,1); renderFotos(); }
-
 function validar(){
   const motivo = document.getElementById('f-motivo').value.trim();
   const fecha = document.getElementById('f-fecha').value;
   const monto = document.getElementById('f-monto').value;
   const centro = document.getElementById('f-centro').value;
-  const cuenta = document.getElementById('f-cuenta').value;
-  return motivo && fecha && monto && centro && cuenta && fotos.length > 0;
+  const respRendicion = document.getElementById('f-resp-rendicion').value;
+  return motivo && fecha && monto && centro && respRendicion && fotos.length > 0;
 }
 
 async function enviarRendicion(){
@@ -346,8 +374,8 @@ async function enviarRendicion(){
   document.getElementById('btn-enviar').textContent = 'Enviando...';
 
   const payload = {
-    tecnico: getTecnico(),
-    cuenta_responsable: document.getElementById('f-cuenta').value,
+    cuenta_responsable: getResponsableFondo(),
+    responsable_rendicion: document.getElementById('f-resp-rendicion').value,
     motivo: document.getElementById('f-motivo').value.trim(),
     fecha: document.getElementById('f-fecha').value,
     monto: Number(document.getElementById('f-monto').value),
@@ -372,7 +400,7 @@ async function subirYGuardar(payload){
   const urls = [];
   for(let i=0;i<payload.fotosDataUrls.length;i++){
     const blob = await (await fetch(payload.fotosDataUrls[i])).blob();
-    const path = `${payload.tecnico.replace(/\s+/g,'_')}/${Date.now()}_${i}_${payload.fotoNames[i]||'boleta.jpg'}`;
+    const path = `${payload.cuenta_responsable.replace(/\s+/g,'_')}/${Date.now()}_${i}_${payload.fotoNames[i]||'boleta.jpg'}`;
     const up = await fetch(`${SB_URL}/storage/v1/object/boletas/${path}`, {
       method:'POST',
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':blob.type||'image/jpeg'},
@@ -382,8 +410,8 @@ async function subirYGuardar(payload){
     urls.push(`${SB_URL}/storage/v1/object/public/boletas/${path}`);
   }
   const row = {
-    tecnico: payload.tecnico,
     cuenta_responsable: payload.cuenta_responsable,
+    responsable_rendicion: payload.responsable_rendicion,
     motivo: payload.motivo,
     fecha: payload.fecha,
     monto: payload.monto,
@@ -434,7 +462,7 @@ function mostrarConfirmacion(ok){
   document.getElementById('enviado-msg').textContent = ok
     ? 'Se guardó correctamente. Cuando se cierre el período, se genera la planilla y el PDF consolidado con todas las boletas.'
     : 'No había conexión, así que la dejamos guardada en tu celular. Se enviará sola apenas vuelva la señal — no cierres la app hasta ver la confirmación ✅.';
-  goStep(2);
+  goStep(3);
 }
 
 function nuevaRendicion(){
@@ -443,7 +471,7 @@ function nuevaRendicion(){
   document.getElementById('f-motivo').value = '';
   document.getElementById('f-monto').value = '';
   document.getElementById('f-centro').value = '';
-  document.getElementById('f-cuenta').value = '';
+  document.getElementById('f-resp-rendicion').value = '';
   document.getElementById('f-fecha').value = new Date().toISOString().slice(0,10);
   document.getElementById('ocr-status').classList.remove('show');
   goStep(1);
@@ -459,28 +487,39 @@ window.addEventListener('offline', () => {
   document.getElementById('offline-bar').classList.add('show');
 });
 
-// Recordar técnico entre visitas
-async function cargarCuentas(){
-  const sel = document.getElementById('f-cuenta');
+// ── Carga de listas dinámicas desde Supabase ─────────────────
+async function cargarFondos(){
+  const sel = document.getElementById('sel-fondo');
   try{
     const res = await fetch(`${SB_URL}/rest/v1/cuentas_responsables?select=nombre&activo=eq.true&order=nombre.asc`, {headers:H});
     const cuentas = await res.json();
     sel.innerHTML = '<option value="">Selecciona...</option>' + cuentas.map(c=>`<option>${c.nombre}</option>`).join('');
+    const saved = localStorage.getItem('rnd_fondo_sel');
+    if(saved){ sel.value = saved; onFondoChange(); }
   }catch(e){
     console.error(e);
     sel.innerHTML = '<option value="">No se pudo cargar — reintenta con conexión</option>';
   }
 }
 
-(function initTecnico(){
-  const saved = localStorage.getItem('rnd_tecnico_sel');
-  if(saved){
-    document.getElementById('sel-tecnico').value = saved;
-    onTecnicoChange();
+async function cargarResponsablesRendicion(){
+  const sel = document.getElementById('f-resp-rendicion');
+  try{
+    const res = await fetch(`${SB_URL}/rest/v1/cuentas_responsables?select=nombre&activo=eq.true&order=nombre.asc`, {headers:H});
+    const cuentas = await res.json();
+    const opciones = [...cuentas.map(c=>c.nombre), ...TECNICOS_FIJOS];
+    sel.innerHTML = '<option value="">Selecciona...</option>' + opciones.map(n=>`<option>${n}</option>`).join('');
+  }catch(e){
+    console.error(e);
+    sel.innerHTML = '<option value="">Selecciona...</option>' + TECNICOS_FIJOS.map(n=>`<option>${n}</option>`).join('');
   }
+}
+
+(function init(){
   actualizarBadgePendientes();
   if(!navigator.onLine) document.getElementById('offline-bar').classList.add('show');
-  cargarCuentas();
+  cargarFondos();
+  cargarResponsablesRendicion();
 })();
 </script>
 </body>

@@ -100,7 +100,7 @@ body{font-family:var(--font);background:#e0e0dc;min-height:100vh;padding:20px;di
 
       <div class="admin-tabs">
         <div class="admin-tab active" id="tabbtn-rendiciones" onclick="cambiarTab('rendiciones')">📋 Rendiciones</div>
-        <div class="admin-tab" id="tabbtn-cuentas" onclick="cambiarTab('cuentas')">💳 Cuentas Responsables</div>
+        <div class="admin-tab" id="tabbtn-cuentas" onclick="cambiarTab('cuentas')">💳 Responsables del Fondo</div>
       </div>
 
       <div class="tab-content active" id="tab-rendiciones">
@@ -112,8 +112,8 @@ body{font-family:var(--font);background:#e0e0dc;min-height:100vh;padding:20px;di
         </div>
 
         <div class="filters">
-          <select id="f-tecnico" onchange="render()"><option value="">Todos los técnicos</option></select>
-          <select id="f-cuenta" onchange="render()"><option value="">Todas las cuentas</option></select>
+          <select id="f-resp-rendicion" onchange="render()"><option value="">Todos los Responsable Rendición</option></select>
+          <select id="f-fondo" onchange="render()"><option value="">Todos los Responsable del Fondo</option></select>
           <select id="f-estado" onchange="render()">
             <option value="">Todos los estados</option>
             <option value="pendiente">Pendiente</option>
@@ -128,11 +128,11 @@ body{font-family:var(--font);background:#e0e0dc;min-height:100vh;padding:20px;di
 
       <div class="tab-content" id="tab-cuentas">
         <div class="hint" style="margin:12px 0;color:var(--text2);font-size:12px;">
-          Estas son las cuentas que aparecen en el formulario de terreno. Desactivar una cuenta no borra las rendiciones ya registradas con ella, solo deja de aparecer como opción para nuevas rendiciones.
+          Estos son los Responsables del Fondo que aparecen al entrar a la app (y también como opción de Responsable Rendición). Desactivar uno no borra las rendiciones ya registradas con él, solo deja de aparecer como opción para nuevas rendiciones.
         </div>
         <div class="add-row">
-          <input type="text" id="nueva-cuenta" placeholder="Nombre de la nueva cuenta">
-          <button class="btn-teal-sm" style="background:var(--purple-dark);padding:0 16px;border-radius:8px;border:none;color:#fff;font-weight:600;cursor:pointer;" onclick="agregarCuenta()">+ Agregar</button>
+          <input type="text" id="nueva-cuenta" placeholder="Nombre del nuevo responsable">
+          <button style="background:var(--purple-dark);padding:0 16px;border-radius:8px;border:none;color:#fff;font-weight:600;cursor:pointer;" onclick="agregarCuenta()">+ Agregar</button>
         </div>
         <div id="lista-cuentas"></div>
       </div>
@@ -184,29 +184,29 @@ function cambiarTab(t){
 async function cargar(){
   const res = await fetch(`${SB_URL}/rest/v1/rendiciones?select=*&order=created_at.desc`, {headers:H});
   registros = await res.json();
-  const tecnicos = [...new Set(registros.map(r=>r.tecnico))].sort();
-  const sel = document.getElementById('f-tecnico');
-  sel.innerHTML = '<option value="">Todos los técnicos</option>' + tecnicos.map(t=>`<option>${t}</option>`).join('');
-  const cuentas = [...new Set(registros.map(r=>r.cuenta_responsable).filter(Boolean))].sort();
-  const selC = document.getElementById('f-cuenta');
-  selC.innerHTML = '<option value="">Todas las cuentas</option>' + cuentas.map(c=>`<option>${c}</option>`).join('');
+  const respRend = [...new Set(registros.map(r=>r.responsable_rendicion))].sort();
+  const selR = document.getElementById('f-resp-rendicion');
+  selR.innerHTML = '<option value="">Todos los Responsable Rendición</option>' + respRend.map(t=>`<option>${t}</option>`).join('');
+  const fondos = [...new Set(registros.map(r=>r.cuenta_responsable).filter(Boolean))].sort();
+  const selF = document.getElementById('f-fondo');
+  selF.innerHTML = '<option value="">Todos los Responsable del Fondo</option>' + fondos.map(c=>`<option>${c}</option>`).join('');
   render();
 }
 
-// ── Gestión de cuentas responsables ─────────────────────
+// ── Gestión de Responsables del Fondo ─────────────────────
 async function cargarCuentasAdmin(){
   const res = await fetch(`${SB_URL}/rest/v1/cuentas_responsables?select=*&order=nombre.asc`, {headers:H});
   const cuentas = await res.json();
   const cont = document.getElementById('lista-cuentas');
   if(cuentas.length === 0){
-    cont.innerHTML = '<div class="empty-sm">No hay cuentas registradas</div>';
+    cont.innerHTML = '<div class="empty-sm">No hay responsables registrados</div>';
     return;
   }
   cont.innerHTML = cuentas.map(c => `
     <div class="cuenta-row">
       <span class="cuenta-nombre ${c.activo?'':'inactivo'}">${c.nombre}</span>
-      <span class="pill ${c.activo?'pill-procesado':'pill-pendiente'}">${c.activo?'activa':'inactiva'}</span>
-      <button class="btn-outline" style="padding:6px 10px;border-radius:8px;border:0.5px solid var(--gray3);background:var(--white);color:var(--text2);font-size:12px;cursor:pointer;" onclick="toggleCuenta(${c.id}, ${!c.activo})">${c.activo?'Desactivar':'Activar'}</button>
+      <span class="pill ${c.activo?'pill-procesado':'pill-pendiente'}">${c.activo?'activo':'inactivo'}</span>
+      <button style="padding:6px 10px;border-radius:8px;border:0.5px solid var(--gray3);background:var(--white);color:var(--text2);font-size:12px;cursor:pointer;" onclick="toggleCuenta(${c.id}, ${!c.activo})">${c.activo?'Desactivar':'Activar'}</button>
     </div>`).join('');
 }
 
@@ -233,13 +233,13 @@ async function toggleCuenta(id, nuevoEstado){
 function fmtMonto(n){ return '$' + Number(n).toLocaleString('es-CL'); }
 
 function render(){
-  const ft = document.getElementById('f-tecnico').value;
-  const fc = document.getElementById('f-cuenta').value;
+  const fr = document.getElementById('f-resp-rendicion').value;
+  const ff = document.getElementById('f-fondo').value;
   const fe = document.getElementById('f-estado').value;
   const fp = document.getElementById('f-periodo').value.trim();
   const filtrados = registros.filter(r =>
-    (!ft || r.tecnico===ft) &&
-    (!fc || r.cuenta_responsable===fc) &&
+    (!fr || r.responsable_rendicion===fr) &&
+    (!ff || r.cuenta_responsable===ff) &&
     (!fe || r.estado===fe) &&
     (!fp || (r.periodo||'').includes(fp))
   );
@@ -261,7 +261,7 @@ function render(){
       <img class="tbl-thumb" src="${(r.foto_urls&&r.foto_urls[0])||''}" onerror="this.style.opacity=0">
       <div class="tbl-main">
         <div class="tbl-motivo">${r.motivo}</div>
-        <div class="tbl-meta">${r.tecnico} · ${r.fecha} · ${r.centro_costo} · ${r.cuenta_responsable||'—'}</div>
+        <div class="tbl-meta">${r.responsable_rendicion} · ${r.fecha} · ${r.centro_costo} · fondo: ${r.cuenta_responsable||'—'}</div>
       </div>
       <div class="tbl-monto">${fmtMonto(r.monto)}</div>
       <span class="pill pill-${r.estado}">${r.estado}</span>
@@ -272,8 +272,8 @@ function verDetalle(id){
   const r = registros.find(x=>x.id===id);
   if(!r) return;
   document.getElementById('modal-body').innerHTML = `
-    <div class="modal-row"><span class="modal-key">Técnico</span><span>${r.tecnico}</span></div>
-    <div class="modal-row"><span class="modal-key">Cuenta Responsable</span><span>${r.cuenta_responsable||'—'}</span></div>
+    <div class="modal-row"><span class="modal-key">Responsable Rendición</span><span>${r.responsable_rendicion}</span></div>
+    <div class="modal-row"><span class="modal-key">Responsable del Fondo</span><span>${r.cuenta_responsable||'—'}</span></div>
     <div class="modal-row"><span class="modal-key">Motivo</span><span>${r.motivo}</span></div>
     <div class="modal-row"><span class="modal-key">Fecha</span><span>${r.fecha}</span></div>
     <div class="modal-row"><span class="modal-key">Monto</span><span>${fmtMonto(r.monto)}</span></div>
