@@ -1,0 +1,9 @@
+{
+  "name": "Rendiciones",
+  "short_name": "Rendiciones",
+  "description": "Registro de gastos con boleta y voucher en terreno",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#e0e0dc",
+  "theme_color": "#1D9E75"
+}

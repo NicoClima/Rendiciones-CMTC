@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Rendiciones · Nueva boleta</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1D9E75">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Rendiciones">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --teal:#1D9E75;--teal-dark:#0F6E56;--teal-light:#E1F5EE;--teal-mid:#9FE1CB;
+  --amber:#EF9F27;--amber-light:#FAEEDA;--amber-dark:#854F0B;
+  --red:#E24B4A;--red-light:#FCEBEB;--red-dark:#A32D2D;
+  --purple-light:#EEEDFE;--purple-dark:#3C3489;
+  --gray:#f7f7f5;--gray2:#eeede9;--gray3:#d4d2cb;
+  --text:#1a1a18;--text2:#5a5a57;--text3:#9a9a96;--white:#fff;
+  --font:'DM Sans',system-ui,sans-serif;--font-mono:'DM Mono',monospace;
+  --radius:12px;--radius-sm:8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:#e0e0dc;display:flex;align-items:flex-start;justify-content:center;min-height:100vh;padding:20px;}
+.phone{width:100%;max-width:420px;min-height:667px;background:var(--gray);border-radius:28px;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,0.2);display:flex;flex-direction:column;}
+.step{display:none;flex-direction:column;flex:1;}
+.step.active{display:flex;}
+.topbar{background:var(--teal);padding:14px 16px 12px;flex-shrink:0;}
+.topbar-row{display:flex;align-items:center;gap:8px;}
+.back-btn{background:rgba(255,255,255,0.2);border:none;border-radius:8px;color:#fff;cursor:pointer;padding:5px 9px;font-size:12px;font-family:var(--font);}
+.top-title{color:#fff;font-size:15px;font-weight:600;flex:1;}
+.top-sub{color:var(--teal-mid);font-size:11px;font-family:var(--font-mono);}
+.dots{display:flex;justify-content:center;gap:5px;padding:10px 0 2px;}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--gray3);}
+.dot.done{background:var(--teal-mid);}
+.dot.active{background:var(--teal);width:18px;border-radius:4px;}
+.step-body{flex:1;overflow-y:auto;padding:14px 16px 4px;}
+.card{background:var(--white);border-radius:var(--radius);border:0.5px solid var(--gray2);margin-bottom:12px;overflow:hidden;}
+.card-body{padding:14px 16px;}
+.slabel{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;}
+.field{margin-bottom:12px;}
+.field:last-child{margin-bottom:0;}
+.field label{font-size:12px;color:var(--text2);display:block;margin-bottom:3px;font-weight:500;}
+.field input,.field select,.field textarea{width:100%;padding:10px 11px;border-radius:var(--radius-sm);border:0.5px solid var(--gray3);font-family:var(--font);font-size:14px;background:var(--gray);color:var(--text);}
+.field textarea{resize:none;min-height:60px;}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--teal);background:var(--white);}
+.hint{font-size:11px;color:var(--text3);margin-top:4px;}
+.foto-add-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 12px;border:1.5px dashed var(--gray3);border-radius:var(--radius-sm);background:var(--gray);cursor:pointer;width:100%;font-family:var(--font);font-size:13px;font-weight:500;color:var(--text2);margin-bottom:8px;}
+.foto-grid{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+.foto-thumb{width:76px;height:76px;border-radius:10px;position:relative;overflow:hidden;background:var(--gray2);}
+.foto-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+.foto-del{position:absolute;top:4px;right:4px;width:20px;height:20px;background:rgba(0,0,0,0.55);border-radius:50%;border:none;cursor:pointer;color:#fff;font-size:11px;line-height:1;}
+.welcome-icon{font-size:40px;text-align:center;margin:18px 0 6px;}
+.welcome-title{font-size:18px;font-weight:600;text-align:center;color:var(--text);margin-bottom:2px;}
+.welcome-sub{font-size:13px;color:var(--text2);text-align:center;margin-bottom:20px;}
+.step-footer{padding:12px 16px;border-top:0.5px solid var(--gray2);display:flex;gap:8px;background:var(--white);flex-shrink:0;}
+.btn-next{flex:1;padding:14px;border-radius:var(--radius);border:none;background:var(--teal);color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);}
+.btn-next:hover{background:var(--teal-dark);}
+.btn-next:disabled{background:var(--teal-mid);cursor:default;}
+.btn-prev{padding:14px;border-radius:var(--radius);border:0.5px solid var(--gray3);background:var(--white);color:var(--text2);font-size:14px;cursor:pointer;font-family:var(--font);}
+.alerta{background:var(--amber-light);border:0.5px solid var(--amber);border-radius:var(--radius-sm);padding:9px 11px;font-size:12px;color:var(--amber-dark);margin-bottom:10px;display:none;gap:6px;}
+.alerta.show{display:flex;}
+.offline-bar{display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#854F0B;color:#fff;font-size:12px;font-weight:500;padding:6px 14px;text-align:center;font-family:var(--font);}
+.offline-bar.show{display:block;}
+.online-bar{display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#1D9E75;color:#fff;font-size:12px;font-weight:500;padding:6px 14px;text-align:center;font-family:var(--font);}
+.online-bar.show{display:block;}
+.pending-badge{display:none;background:#E24B4A;color:#fff;font-size:10px;font-weight:600;padding:3px 10px;border-radius:10px;margin:0 auto 8px;width:fit-content;font-family:var(--font);cursor:pointer;}
+.pending-badge.show{display:block;}
+.enviado-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:2rem;text-align:center;flex-direction:column;}
+.enviado-icon{font-size:56px;margin-bottom:12px;}
+.enviado-title{font-size:20px;font-weight:600;color:var(--teal-dark);margin-bottom:6px;}
+.enviado-msg{font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:20px;}
+.tecnico-tag{display:inline-flex;align-items:center;gap:6px;background:var(--teal-light);color:var(--teal-dark);font-size:11px;font-weight:600;padding:4px 10px;border-radius:10px;cursor:pointer;}
+</style>
+</head>
+<body>
+
+<div class="offline-bar" id="offline-bar">⚠️ Sin conexión — la rendición se guardará y se enviará sola cuando vuelva la señal</div>
+<div class="online-bar" id="online-bar">✅ Conexión restaurada — sincronizando...</div>
+
+<div class="phone">
+
+  <!-- STEP 0: técnico -->
+  <div class="step active" id="step-0">
+    <div class="topbar">
+      <div class="topbar-row"><div class="top-title">Rendiciones · Boletas y Vouchers</div></div>
+    </div>
+    <div class="step-body">
+      <div class="welcome-icon">🧾</div>
+      <div class="welcome-title">¿Quién eres?</div>
+      <div class="welcome-sub">Registra tu compra con boleta o voucher en menos de un minuto</div>
+      <div class="card"><div class="card-body">
+        <div class="field">
+          <label>Técnico *</label>
+          <select id="sel-tecnico" onchange="onTecnicoChange()">
+            <option value="">Selecciona tu nombre...</option>
+            <option>Jorge C.</option>
+            <option>Demis S.</option>
+            <option>No Aplica</option>
+          </select>
+        </div>
+      </div></div>
+    </div>
+    <div class="step-footer">
+      <button class="btn-next" id="btn-continuar-s0" disabled onclick="goStep(1)">Continuar →</button>
+    </div>
+  </div>
+
+  <!-- STEP 1: formulario -->
+  <div class="step" id="step-1">
+    <div class="topbar">
+      <div class="topbar-row">
+        <button class="back-btn" onclick="cambiarTecnico()">← Cambiar</button>
+        <div class="top-title">Nueva rendición</div>
+      </div>
+      <div class="dots"><div class="dot active"></div><div class="dot"></div></div>
+    </div>
+    <div class="step-body">
+      <span class="tecnico-tag" onclick="cambiarTecnico()" id="tecnico-tag">👤 —</span>
+      <div class="card" style="margin-top:12px"><div class="card-body">
+        <div class="slabel">Datos mínimos</div>
+        <div class="field">
+          <label>Motivo *</label>
+          <input type="text" id="f-motivo" placeholder="Ej: Bencina camioneta, insumos, almuerzo terreno...">
+        </div>
+        <div class="field">
+          <label>Fecha *</label>
+          <input type="date" id="f-fecha">
+        </div>
+        <div class="field">
+          <label>Monto (CLP) *</label>
+          <input type="number" id="f-monto" inputmode="numeric" placeholder="0">
+        </div>
+        <div class="field">
+          <label>Centro de Costo / Proyecto *</label>
+          <select id="f-centro">
+            <option value="">Selecciona...</option>
+            <option>General</option>
+            <option>Administración</option>
+            <option>Proyecto A</option>
+            <option>Proyecto B</option>
+            <option>Terreno</option>
+          </select>
+          <div class="hint">¿Falta tu proyecto? Avísale a Admin para agregarlo a la lista.</div>
+        </div>
+        <div class="field">
+          <label>Cuenta Responsable *</label>
+          <select id="f-cuenta">
+            <option value="">Cargando...</option>
+          </select>
+          <div class="hint">Cuenta con la que se pagó la compra.</div>
+        </div>
+      </div></div>
+
+      <div class="card"><div class="card-body">
+        <div class="slabel">Foto de la boleta *</div>
+        <button class="foto-add-btn" onclick="document.getElementById('foto-camera').click()">📷 Tomar foto</button>
+        <button class="foto-add-btn" onclick="document.getElementById('foto-galeria').click()">🖼️ Elegir de galería</button>
+        <input type="file" id="foto-camera" accept="image/*" capture="environment" style="display:none" onchange="onFotoSel(event)">
+        <input type="file" id="foto-galeria" accept="image/*" multiple style="display:none" onchange="onFotoSel(event)">
+        <div class="hint">No necesitas llenar proveedor, N° folio ni categoría — eso lo completamos automáticamente leyendo la foto.</div>
+        <div class="foto-grid" id="foto-grid"></div>
+        <div class="alerta" id="ocr-status" style="margin-top:8px"></div>
+      </div></div>
+
+      <div class="alerta" id="alerta-incompleto">⚠️ <span>Completa motivo, fecha, monto, centro de costo y al menos una foto.</span></div>
+    </div>
+    <div class="step-footer">
+      <button class="btn-prev" onclick="goStep(0)">←</button>
+      <button class="btn-next" id="btn-enviar" onclick="enviarRendicion()">Enviar rendición →</button>
+    </div>
+  </div>
+
+  <!-- STEP 2: confirmación -->
+  <div class="step" id="step-2">
+    <div class="topbar"><div class="topbar-row"><div class="top-title">Rendiciones</div></div></div>
+    <div class="enviado-wrap">
+      <div class="pending-badge" id="pending-badge" onclick="flushPendientes()">0 pendientes por enviar — toca para reintentar</div>
+      <div class="enviado-icon" id="enviado-icon">✅</div>
+      <div class="enviado-title" id="enviado-title">¡Rendición registrada!</div>
+      <div class="enviado-msg" id="enviado-msg">Se guardó correctamente. Cuando se cierre el período, se genera la planilla y el PDF consolidado con todas las boletas.</div>
+      <button class="btn-next" style="max-width:220px" onclick="nuevaRendicion()">➕ Nueva rendición</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- OCR gratuito, corre en el navegador del técnico (sin API key, sin costo) -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script>
+// ============================================================
+// CONFIG — reemplaza con los datos de tu proyecto Supabase
+// (Supabase → Project Settings → API)
+// ============================================================
+const SB_URL = 'https://badqakfrggfyseobcqvn.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhZHFha2ZyZ2dmeXNlb2JjcXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3MTAyODYsImV4cCI6MjA5OTI4NjI4Nn0.UFd85reDPFCAaXnb6d06UgWrWs9jt9L1KhP6bl98Nfg';
+const H = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Accept':'application/json'};
+
+let fotos = []; // {file, dataUrl}
+
+function getTecnico(){
+  return document.getElementById('sel-tecnico').value;
+}
+
+function onTecnicoChange(){
+  const t = getTecnico();
+  document.getElementById('btn-continuar-s0').disabled = !t;
+  if(t) localStorage.setItem('rnd_tecnico_sel', t);
+}
+
+function cambiarTecnico(){
+  goStep(0);
+}
+
+function goStep(n){
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.getElementById('step-' + n).classList.add('active');
+  if(n === 1){
+    document.getElementById('tecnico-tag').textContent = '👤 ' + getTecnico();
+    if(!document.getElementById('f-fecha').value){
+      document.getElementById('f-fecha').value = new Date().toISOString().slice(0,10);
+    }
+  }
+}
+
+function onFotoSel(ev){
+  const files = Array.from(ev.target.files || []);
+  const esPrimeraTanda = fotos.length === 0;
+  files.forEach((file, idx) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      fotos.push({file, dataUrl: e.target.result});
+      renderFotos();
+      // Solo intentamos leer automáticamente la primera foto que se agrega
+      // (se asume que es la boleta principal, de frente y legible)
+      if(esPrimeraTanda && idx === 0){
+        leerBoleta(e.target.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+  ev.target.value = '';
+}
+
+// ── Lectura automática de la boleta (OCR en el navegador, gratis) ──
+let ocrEnCurso = false;
+
+function mostrarOcrEstado(texto, cargando){
+  const el = document.getElementById('ocr-status');
+  el.innerHTML = (cargando ? '⏳ ' : '🔍 ') + `<span>${texto}</span>`;
+  el.classList.add('show');
+}
+
+async function leerBoleta(dataUrl){
+  if(ocrEnCurso || typeof Tesseract === 'undefined') return;
+  ocrEnCurso = true;
+  mostrarOcrEstado('Leyendo la boleta para proponer fecha y monto...', true);
+  try{
+    const { data: { text } } = await Tesseract.recognize(dataUrl, 'spa');
+    const monto = extraerMonto(text);
+    const fecha = extraerFecha(text);
+    const detectado = [];
+    if(monto){ document.getElementById('f-monto').value = monto; detectado.push('el monto'); }
+    if(fecha){ document.getElementById('f-fecha').value = fecha; detectado.push('la fecha'); }
+    if(detectado.length){
+      mostrarOcrEstado(`Detectamos ${detectado.join(' y ')} automáticamente — revisa que estén correctos antes de enviar.`, false);
+    } else {
+      mostrarOcrEstado('No logramos leer la boleta automáticamente, completa los datos a mano.', false);
+    }
+  }catch(e){
+    console.error(e);
+    mostrarOcrEstado('No logramos leer la boleta automáticamente, completa los datos a mano.', false);
+  }
+  ocrEnCurso = false;
+}
+
+function limpiarNumero(s){
+  return Number(s.replace(/[^\d]/g,''));
+}
+
+function extraerMonto(text){
+  const lineas = text.split('\n');
+  const candidatos = [];
+  lineas.forEach(linea => {
+    if(/TOTAL/i.test(linea) && !/SUBTOTAL/i.test(linea)){
+      const nums = linea.match(/\$?\s?\d{1,3}(?:[.,]\d{3})+|\$?\s?\d{3,}/g);
+      if(nums) nums.forEach(n => candidatos.push(limpiarNumero(n)));
+    }
+  });
+  if(candidatos.length) return Math.max(...candidatos);
+  // sin "TOTAL" legible: usamos el número con formato de miles más grande del texto
+  const nums = text.match(/\d{1,3}(?:[.,]\d{3})+/g);
+  if(nums && nums.length){
+    const vals = nums.map(limpiarNumero);
+    return Math.max(...vals);
+  }
+  return null;
+}
+
+function extraerFecha(text){
+  const regex = /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/g;
+  const idxFecha = text.toUpperCase().indexOf('FECHA');
+  let m, mejor = null;
+  while((m = regex.exec(text)) !== null){
+    if(!mejor) mejor = m;
+    if(idxFecha >= 0 && Math.abs(m.index - idxFecha) < 30){ mejor = m; break; }
+  }
+  if(!mejor) return null;
+  let [, d, mo, y] = mejor;
+  if(y.length === 2) y = '20' + y;
+  d = d.padStart(2,'0'); mo = mo.padStart(2,'0');
+  if(Number(mo) > 12 || Number(d) > 31 || Number(mo) < 1 || Number(d) < 1) return null;
+  const hoy = new Date();
+  if(Number(y) > hoy.getFullYear() + 1) return null;
+  return `${y}-${mo}-${d}`;
+}
+
+function renderFotos(){
+  const grid = document.getElementById('foto-grid');
+  grid.innerHTML = fotos.map((f,i) => `
+    <div class="foto-thumb">
+      <img src="${f.dataUrl}">
+      <button class="foto-del" onclick="delFoto(${i})">✕</button>
+    </div>`).join('');
+}
+
+function delFoto(i){ fotos.splice(i,1); renderFotos(); }
+
+function validar(){
+  const motivo = document.getElementById('f-motivo').value.trim();
+  const fecha = document.getElementById('f-fecha').value;
+  const monto = document.getElementById('f-monto').value;
+  const centro = document.getElementById('f-centro').value;
+  const cuenta = document.getElementById('f-cuenta').value;
+  return motivo && fecha && monto && centro && cuenta && fotos.length > 0;
+}
+
+async function enviarRendicion(){
+  if(!validar()){
+    document.getElementById('alerta-incompleto').classList.add('show');
+    return;
+  }
+  document.getElementById('alerta-incompleto').classList.remove('show');
+  document.getElementById('btn-enviar').disabled = true;
+  document.getElementById('btn-enviar').textContent = 'Enviando...';
+
+  const payload = {
+    tecnico: getTecnico(),
+    cuenta_responsable: document.getElementById('f-cuenta').value,
+    motivo: document.getElementById('f-motivo').value.trim(),
+    fecha: document.getElementById('f-fecha').value,
+    monto: Number(document.getElementById('f-monto').value),
+    centro_costo: document.getElementById('f-centro').value,
+    fotosDataUrls: fotos.map(f => f.dataUrl),
+    fotoNames: fotos.map(f => f.file.name)
+  };
+
+  try{
+    await subirYGuardar(payload);
+    mostrarConfirmacion(true);
+  }catch(err){
+    console.error(err);
+    guardarPendiente(payload);
+    mostrarConfirmacion(false);
+  }
+  document.getElementById('btn-enviar').disabled = false;
+  document.getElementById('btn-enviar').textContent = 'Enviar rendición →';
+}
+
+async function subirYGuardar(payload){
+  const urls = [];
+  for(let i=0;i<payload.fotosDataUrls.length;i++){
+    const blob = await (await fetch(payload.fotosDataUrls[i])).blob();
+    const path = `${payload.tecnico.replace(/\s+/g,'_')}/${Date.now()}_${i}_${payload.fotoNames[i]||'boleta.jpg'}`;
+    const up = await fetch(`${SB_URL}/storage/v1/object/boletas/${path}`, {
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':blob.type||'image/jpeg'},
+      body: blob
+    });
+    if(!up.ok) throw new Error(await up.text());
+    urls.push(`${SB_URL}/storage/v1/object/public/boletas/${path}`);
+  }
+  const row = {
+    tecnico: payload.tecnico,
+    cuenta_responsable: payload.cuenta_responsable,
+    motivo: payload.motivo,
+    fecha: payload.fecha,
+    monto: payload.monto,
+    centro_costo: payload.centro_costo,
+    foto_urls: urls,
+    estado: 'pendiente'
+  };
+  const ins = await fetch(`${SB_URL}/rest/v1/rendiciones`, {
+    method:'POST', headers:{...H,'Prefer':'return=representation'}, body: JSON.stringify(row)
+  });
+  if(!ins.ok) throw new Error(await ins.text());
+  return ins.json();
+}
+
+function guardarPendiente(payload){
+  const q = JSON.parse(localStorage.getItem('rnd_pendientes') || '[]');
+  q.push(payload);
+  localStorage.setItem('rnd_pendientes', JSON.stringify(q));
+  actualizarBadgePendientes();
+}
+
+function actualizarBadgePendientes(){
+  const q = JSON.parse(localStorage.getItem('rnd_pendientes') || '[]');
+  const badge = document.getElementById('pending-badge');
+  if(q.length > 0){
+    badge.textContent = `${q.length} pendiente${q.length>1?'s':''} por enviar — toca para reintentar`;
+    badge.classList.add('show');
+  } else {
+    badge.classList.remove('show');
+  }
+}
+
+async function flushPendientes(){
+  const q = JSON.parse(localStorage.getItem('rnd_pendientes') || '[]');
+  if(q.length === 0) return;
+  const restantes = [];
+  for(const payload of q){
+    try{ await subirYGuardar(payload); }
+    catch(e){ restantes.push(payload); }
+  }
+  localStorage.setItem('rnd_pendientes', JSON.stringify(restantes));
+  actualizarBadgePendientes();
+}
+
+function mostrarConfirmacion(ok){
+  document.getElementById('enviado-icon').textContent = ok ? '✅' : '📥';
+  document.getElementById('enviado-title').textContent = ok ? '¡Rendición registrada!' : 'Guardada sin conexión';
+  document.getElementById('enviado-msg').textContent = ok
+    ? 'Se guardó correctamente. Cuando se cierre el período, se genera la planilla y el PDF consolidado con todas las boletas.'
+    : 'No había conexión, así que la dejamos guardada en tu celular. Se enviará sola apenas vuelva la señal — no cierres la app hasta ver la confirmación ✅.';
+  goStep(2);
+}
+
+function nuevaRendicion(){
+  fotos = [];
+  renderFotos();
+  document.getElementById('f-motivo').value = '';
+  document.getElementById('f-monto').value = '';
+  document.getElementById('f-centro').value = '';
+  document.getElementById('f-cuenta').value = '';
+  document.getElementById('f-fecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('ocr-status').classList.remove('show');
+  goStep(1);
+}
+
+window.addEventListener('online', () => {
+  document.getElementById('offline-bar').classList.remove('show');
+  document.getElementById('online-bar').classList.add('show');
+  flushPendientes();
+  setTimeout(() => document.getElementById('online-bar').classList.remove('show'), 2500);
+});
+window.addEventListener('offline', () => {
+  document.getElementById('offline-bar').classList.add('show');
+});
+
+// Recordar técnico entre visitas
+async function cargarCuentas(){
+  const sel = document.getElementById('f-cuenta');
+  try{
+    const res = await fetch(`${SB_URL}/rest/v1/cuentas_responsables?select=nombre&activo=eq.true&order=nombre.asc`, {headers:H});
+    const cuentas = await res.json();
+    sel.innerHTML = '<option value="">Selecciona...</option>' + cuentas.map(c=>`<option>${c.nombre}</option>`).join('');
+  }catch(e){
+    console.error(e);
+    sel.innerHTML = '<option value="">No se pudo cargar — reintenta con conexión</option>';
+  }
+}
+
+(function initTecnico(){
+  const saved = localStorage.getItem('rnd_tecnico_sel');
+  if(saved){
+    document.getElementById('sel-tecnico').value = saved;
+    onTecnicoChange();
+  }
+  actualizarBadgePendientes();
+  if(!navigator.onLine) document.getElementById('offline-bar').classList.add('show');
+  cargarCuentas();
+})();
+</script>
+</body>
+</html>
