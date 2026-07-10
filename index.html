@@ -102,6 +102,9 @@ body{font-family:var(--font);background:#e0e0dc;display:flex;align-items:flex-st
     <div class="step-footer">
       <button class="btn-next" id="btn-continuar-s0" disabled onclick="goStep(1)">Continuar →</button>
     </div>
+    <div style="text-align:center;padding:0 0 14px;">
+      <a href="admin.html" style="font-size:11px;color:var(--text3);text-decoration:none;">Panel de administración →</a>
+    </div>
   </div>
 
   <!-- STEP 1: Foto de la boleta -->
@@ -165,14 +168,9 @@ body{font-family:var(--font);background:#e0e0dc;display:flex;align-items:flex-st
         <div class="field">
           <label>Centro de Costo / Proyecto *</label>
           <select id="f-centro">
-            <option value="">Selecciona...</option>
-            <option>General</option>
-            <option>Administración</option>
-            <option>Proyecto A</option>
-            <option>Proyecto B</option>
-            <option>Terreno</option>
+            <option value="">Cargando...</option>
           </select>
-          <div class="hint">¿Falta tu proyecto? Avísale a Admin para agregarlo a la lista.</div>
+          <div class="hint">¿Falta tu proyecto? Se administra desde el Panel de administración.</div>
         </div>
         <div class="field">
           <label>Responsable Rendición *</label>
@@ -554,6 +552,7 @@ window.addEventListener('offline', () => {
 // schema.sql) o hay un problema de red, igual dejamos la app usable
 // con esta lista de respaldo, en vez de bloquear a los técnicos.
 const RESPALDO_NOMBRES = ['Eduardo M.', 'Yerko P.', 'Nicolás R.', 'Jorge C.', 'Demis S.', 'No Aplica'];
+const RESPALDO_CENTROS = ['General', 'Administración', 'Proyecto A', 'Proyecto B', 'Terreno'];
 
 async function cargarFondos(){
   const sel = document.getElementById('sel-fondo');
@@ -590,10 +589,24 @@ async function cargarResponsablesRendicion(){
   }
 }
 
+async function cargarCentros(){
+  const sel = document.getElementById('f-centro');
+  try{
+    const res = await fetch(`${SB_URL}/rest/v1/centros_costo?select=nombre&activo=eq.true&order=nombre.asc`, {headers:H});
+    const centros = res.ok ? await res.json() : [];
+    const opciones = Array.isArray(centros) && centros.length ? centros.map(c=>c.nombre) : RESPALDO_CENTROS;
+    sel.innerHTML = '<option value="">Selecciona...</option>' + opciones.map(n=>`<option>${n}</option>`).join('');
+  }catch(e){
+    console.error(e);
+    sel.innerHTML = '<option value="">Selecciona...</option>' + RESPALDO_CENTROS.map(n=>`<option>${n}</option>`).join('');
+  }
+}
+
 (function init(){
   actualizarBadgePendientes();
   if(!navigator.onLine) document.getElementById('offline-bar').classList.add('show');
   cargarFondos();
+  cargarCentros();
   cargarResponsablesRendicion();
 })();
 </script>

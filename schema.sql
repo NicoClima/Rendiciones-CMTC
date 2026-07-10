@@ -130,6 +130,43 @@ insert into public.usuarios (nombre, activo) values
   ('No Aplica', true)
 on conflict (nombre) do nothing;
 
+-- 2c) Centros de Costo / Proyecto (editable desde el panel admin,
+-- pestaña "Centros de Costo").
+create table if not exists public.centros_costo (
+  id      bigint generated always as identity primary key,
+  nombre  text not null unique,
+  activo  boolean not null default true
+);
+
+alter table public.centros_costo enable row level security;
+
+drop policy if exists "centros_select_anon" on public.centros_costo;
+create policy "centros_select_anon"
+  on public.centros_costo for select
+  to anon
+  using (true);
+
+drop policy if exists "centros_insert_anon" on public.centros_costo;
+create policy "centros_insert_anon"
+  on public.centros_costo for insert
+  to anon
+  with check (true);
+
+drop policy if exists "centros_update_anon" on public.centros_costo;
+create policy "centros_update_anon"
+  on public.centros_costo for update
+  to anon
+  using (true)
+  with check (true);
+
+insert into public.centros_costo (nombre, activo) values
+  ('General', true),
+  ('Administración', true),
+  ('Proyecto A', true),
+  ('Proyecto B', true),
+  ('Terreno', true)
+on conflict (nombre) do nothing;
+
 -- 3) Bucket de Storage para las fotos de boletas
 insert into storage.buckets (id, name, public)
 values ('boletas', 'boletas', true)
