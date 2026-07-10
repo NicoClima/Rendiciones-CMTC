@@ -341,19 +341,40 @@ function extraerMonto(text){
 }
 
 function extraerFolio(text){
-  // Busca el N° de boleta/recibo en líneas que digan "BOLETA" o "RECIBO"
-  // (ignorando la línea de resolución del SII), tomando el último token
-  // alfanumérico con dígitos de esa misma línea. Si esa línea no trae
-  // ningún número (ej. es solo un encabezado suelto), seguimos revisando
-  // las demás líneas en vez de adivinar con la línea siguiente.
-  const lineas = text.split('\n').map(l => l.trim());
+  // El N° de boleta es de los datos más difíciles de leer bien por OCR
+  // (fuente térmica, símbolo "N°" que se lee distinto), así que probamos
+  // tres estrategias de la más a la menos confiable, en orden.
+  const lineas = text.split('\n').map(l => l.trim()).filter(Boolean);
   const tokenRx = /[A-Z0-9]{4,}(?:-[A-Z0-9]{3,})?/gi;
+  const esResolucion = l => /RES\.?\s*\d|RESOLUCI/i.test(l);
+
+  // 1) Línea que diga "BOLETA" o "RECIBO" (no la de resolución SII):
+  // tomamos el último token alfanumérico con dígitos de esa misma línea.
   for(const linea of lineas){
-    if(!/BOLETA|RECIBO/i.test(linea)) continue;
-    if(/RES\.?\s*\d|RESOLUCI/i.test(linea)) continue;
+    if(!/BOLETA|RECIBO/i.test(linea) || esResolucion(linea)) continue;
     const enLinea = (linea.match(tokenRx) || []).filter(t => /\d/.test(t));
     if(enLinea.length) return enLinea[enLinea.length - 1].toUpperCase();
   }
+
+  // 2) Cualquier línea con un indicador explícito de número
+  // ("N°", "Nro", "Folio", "N:") seguido de dígitos.
+  for(const linea of lineas){
+    if(esResolucion(linea)) continue;
+    const m = linea.match(/(?:N[°ºo]?\.?|NRO\.?|FOLIO)\s*:?\s*([A-Z0-9]{3,}(?:-[A-Z0-9]{3,})?)/i);
+    if(m && /\d/.test(m[1])) return m[1].toUpperCase();
+  }
+
+  // 3) Último recurso: un número suelto de 4 a 9 dígitos en el primer
+  // tercio del documento (el folio suele ir cerca del encabezado, antes
+  // del detalle de productos, montos y fecha).
+  const limite = Math.max(3, Math.ceil(lineas.length / 3));
+  for(let i=0;i<limite;i++){
+    const linea = lineas[i];
+    if(esResolucion(linea) || /FECHA|TOTAL|MONTO/i.test(linea)) continue;
+    const m = linea.match(/\b\d{4,9}\b/);
+    if(m) return m[0];
+  }
+
   return null;
 }
 
@@ -529,17 +550,23 @@ window.addEventListener('offline', () => {
 });
 
 // ── Carga de listas dinámicas desde Supabase ─────────────────
+// Si Supabase todavía no tiene las tablas al día (ej. falta correr
+// schema.sql) o hay un problema de red, igual dejamos la app usable
+// con esta lista de respaldo, en vez de bloquear a los técnicos.
+const RESPALDO_NOMBRES = ['Eduardo M.', 'Yerko P.', 'Nicolás R.', 'Jorge C.', 'Demis S.', 'No Aplica'];
+
 async function cargarFondos(){
   const sel = document.getElementById('sel-fondo');
   try{
     const res = await fetch(`${SB_URL}/rest/v1/cuentas_responsables?select=nombre&activo=eq.true&order=nombre.asc`, {headers:H});
-    const cuentas = await res.json();
-    sel.innerHTML = '<option value="">Selecciona...</option>' + cuentas.map(c=>`<option>${c.nombre}</option>`).join('');
+    const cuentas = res.ok ? await res.json() : [];
+    const opciones = Array.isArray(cuentas) && cuentas.length ? cuentas.map(c=>c.nombre) : RESPALDO_NOMBRES;
+    sel.innerHTML = '<option value="">Selecciona...</option>' + opciones.map(n=>`<option>${n}</option>`).join('');
     const saved = localStorage.getItem('rnd_fondo_sel');
     if(saved){ sel.value = saved; onFondoChange(); }
   }catch(e){
     console.error(e);
-    sel.innerHTML = '<option value="">No se pudo cargar — reintenta con conexión</option>';
+    sel.innerHTML = '<option value="">Selecciona...</option>' + RESPALDO_NOMBRES.map(n=>`<option>${n}</option>`).join('');
   }
 }
 
@@ -550,13 +577,16 @@ async function cargarResponsablesRendicion(){
       fetch(`${SB_URL}/rest/v1/cuentas_responsables?select=nombre&activo=eq.true&order=nombre.asc`, {headers:H}),
       fetch(`${SB_URL}/rest/v1/usuarios?select=nombre&activo=eq.true&order=nombre.asc`, {headers:H})
     ]);
-    const cuentas = await resCuentas.json();
-    const usuarios = await resUsuarios.json();
-    const opciones = [...new Set([...cuentas.map(c=>c.nombre), ...usuarios.map(u=>u.nombre)])];
-    sel.innerHTML = '<option value="">Selecciona...</option>' + opciones.map(n=>`<option>${n}</option>`).join('');
+    const cuentas = resCuentas.ok ? await resCuentas.json() : [];
+    const usuarios = resUsuarios.ok ? await resUsuarios.json() : [];
+    const opciones = [...new Set([
+      ...(Array.isArray(cuentas) ? cuentas.map(c=>c.nombre) : []),
+      ...(Array.isArray(usuarios) ? usuarios.map(u=>u.nombre) : [])
+    ])];
+    sel.innerHTML = '<option value="">Selecciona...</option>' + (opciones.length ? opciones : RESPALDO_NOMBRES).map(n=>`<option>${n}</option>`).join('');
   }catch(e){
     console.error(e);
-    sel.innerHTML = '<option value="">No se pudo cargar — reintenta con conexión</option>';
+    sel.innerHTML = '<option value="">Selecciona...</option>' + RESPALDO_NOMBRES.map(n=>`<option>${n}</option>`).join('');
   }
 }
 
