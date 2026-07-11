@@ -456,32 +456,64 @@ async function descargarPDF(){
       y += 14;
     });
 
-    for(const r of filtradosActuales){
-      const urls = r.foto_urls || [];
-      for(let i=0;i<urls.length;i++){
-        doc.addPage();
-        doc.setFontSize(11);
-        doc.text(`${r.fecha}  ·  ${r.responsable_rendicion}  ·  ${fmtMonto(r.monto)}`, margin, 40);
-        doc.setFontSize(9);
-        doc.text(`Motivo: ${r.motivo}`, margin, 56);
-        doc.text(`Centro de Costo: ${r.centro_costo}   Fondo: ${r.cuenta_responsable||'—'}   Tipo: ${r.tipo_documento||'Boleta'}${r.folio?'   Folio: '+r.folio:''}`, margin, 70);
+    // Aplanamos todas las fotos de las rendiciones filtradas en una sola
+    // lista, para armar una cuadrícula de 3×4 (12 boletas por hoja) en vez
+    // de una página completa por cada foto.
+    const fotosFlat = [];
+    filtradosActuales.forEach(r => {
+      (r.foto_urls || []).forEach(url => fotosFlat.push({ r, url }));
+    });
+
+    if(fotosFlat.length === 0){
+      doc.addPage();
+      doc.setFontSize(11);
+      doc.text('Ninguna de las rendiciones filtradas tiene fotos adjuntas.', margin, 60);
+    } else {
+      const cols = 3, filas = 4, porPagina = cols * filas;
+      const gap = 10;
+      const gridTop = 90;
+      const cellW = (pageW - margin*2 - gap*(cols-1)) / cols;
+      const cellH = (pageH - margin - gridTop - gap*(filas-1)) / filas;
+      const capH = 34; // alto reservado para el texto bajo cada foto
+      const imgAreaH = cellH - capH;
+
+      for(let i=0; i<fotosFlat.length; i++){
+        const posEnPagina = i % porPagina;
+        if(posEnPagina === 0){
+          doc.addPage();
+          doc.setFontSize(11);
+          doc.text(`Boletas — página ${Math.floor(i/porPagina)+1} de ${Math.ceil(fotosFlat.length/porPagina)}`, margin, 50);
+        }
+        const col = posEnPagina % cols;
+        const fila = Math.floor(posEnPagina / cols);
+        const cellX = margin + col*(cellW+gap);
+        const cellY = gridTop + fila*(cellH+gap);
+        const { r, url } = fotosFlat[i];
+
         try{
-          const dataUrl = await cargarImagenComoDataURL(urls[i]);
+          const dataUrl = await cargarImagenComoDataURL(url);
           const img = new Image();
           await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = dataUrl; });
-          const maxW = pageW - margin*2;
-          const maxH = pageH - 100;
-          let w = img.width, h = img.height;
-          const ratio = Math.min(maxW/w, maxH/h, 1);
-          w *= ratio; h *= ratio;
-          const x = (pageW - w)/2;
+          const ratio = Math.min(cellW/img.width, imgAreaH/img.height, 1);
+          const w = img.width*ratio, h = img.height*ratio;
+          const x = cellX + (cellW - w)/2;
+          const y = cellY + (imgAreaH - h)/2;
           const mime = dataUrl.substring(5, dataUrl.indexOf(';'));
           const formato = mime.includes('png') ? 'PNG' : 'JPEG';
-          doc.addImage(dataUrl, formato, x, 90, w, h);
+          doc.addImage(dataUrl, formato, x, y, w, h);
         }catch(e){
           console.error(e);
-          doc.text('(No se pudo cargar la foto de esta boleta — revisa tu conexión)', margin, 100);
+          doc.setFontSize(7);
+          doc.text('(no se pudo cargar la foto)', cellX+3, cellY+imgAreaH/2);
         }
+
+        doc.setDrawColor(210);
+        doc.rect(cellX, cellY, cellW, cellH);
+        doc.setDrawColor(0);
+        doc.setFontSize(6.5);
+        doc.text(`${r.fecha} · ${r.tipo_documento||'Boleta'}`, cellX+3, cellY+imgAreaH+11);
+        doc.text(fmtMonto(r.monto), cellX+3, cellY+imgAreaH+20);
+        doc.text((r.motivo||'').slice(0,26), cellX+3, cellY+imgAreaH+29);
       }
     }
 
