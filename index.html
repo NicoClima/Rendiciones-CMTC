@@ -466,13 +466,28 @@ function fetchConTimeout(url, opciones){
   return fetch(url, {...opciones, signal: controller.signal}).finally(() => clearTimeout(id));
 }
 
+// Supabase Storage no acepta tildes, espacios ni paréntesis en la ruta
+// (ej. nombres de foto tipo "WhatsApp Image ... (1).jpeg" o "Nicolás").
+// Generamos siempre una ruta limpia en vez de usar el nombre original.
+function sanitizarSegmento(s){
+  return (s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quita tildes
+    .replace(/[^a-zA-Z0-9_-]/g, '_'); // cualquier otro caracter raro -> _
+}
+function extensionSegura(nombre){
+  const m = (nombre || '').match(/\.([a-zA-Z0-9]{2,4})$/);
+  return m ? m[1].toLowerCase() : 'jpg';
+}
+
 async function subirYGuardar(payload, onProgreso){
   const urls = [];
   const total = payload.fotosDataUrls.length;
   for(let i=0;i<total;i++){
     if(onProgreso) onProgreso(`Subiendo foto ${i+1} de ${total}...`);
     const blob = await (await fetch(payload.fotosDataUrls[i])).blob();
-    const path = `${payload.cuenta_responsable.replace(/\s+/g,'_')}/${Date.now()}_${i}_${payload.fotoNames[i]||'boleta.jpg'}`;
+    const carpeta = sanitizarSegmento(payload.cuenta_responsable);
+    const ext = extensionSegura(payload.fotoNames[i]);
+    const path = `${carpeta}/${Date.now()}_${i}.${ext}`;
     const up = await fetchConTimeout(`${SB_URL}/storage/v1/object/boletas/${path}`, {
       method:'POST',
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':blob.type||'image/jpeg'},
