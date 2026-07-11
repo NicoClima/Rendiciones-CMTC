@@ -135,6 +135,22 @@ body{font-family:var(--font);background:#e0e0dc;min-height:100vh;padding:20px;di
             <option value="Boleta">Solo Boleta</option>
             <option value="Factura">Solo Factura</option>
           </select>
+          <select id="f-anio" onchange="render()"><option value="">Todos los años</option></select>
+          <select id="f-mes" onchange="render()">
+            <option value="">Todos los meses</option>
+            <option value="01">Enero</option>
+            <option value="02">Febrero</option>
+            <option value="03">Marzo</option>
+            <option value="04">Abril</option>
+            <option value="05">Mayo</option>
+            <option value="06">Junio</option>
+            <option value="07">Julio</option>
+            <option value="08">Agosto</option>
+            <option value="09">Septiembre</option>
+            <option value="10">Octubre</option>
+            <option value="11">Noviembre</option>
+            <option value="12">Diciembre</option>
+          </select>
           <input type="text" id="f-periodo" placeholder="Período (ej: 2026-07)" oninput="render()">
           <label style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:4px;">Desde <input type="date" id="f-desde" onchange="render()"></label>
           <label style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:4px;">Hasta <input type="date" id="f-hasta" onchange="render()"></label>
@@ -248,6 +264,9 @@ async function cargar(){
   const fondos = [...new Set(registros.map(r=>r.cuenta_responsable).filter(Boolean))].sort();
   const selF = document.getElementById('f-fondo');
   selF.innerHTML = '<option value="">Todos los Responsable del Fondo</option>' + fondos.map(c=>`<option>${c}</option>`).join('');
+  const anios = [...new Set(registros.map(r=>(r.fecha||'').slice(0,4)).filter(Boolean))].sort().reverse();
+  const selA = document.getElementById('f-anio');
+  selA.innerHTML = '<option value="">Todos los años</option>' + anios.map(a=>`<option>${a}</option>`).join('');
   render();
 }
 
@@ -297,6 +316,8 @@ function render(){
   const ff = document.getElementById('f-fondo').value;
   const fe = document.getElementById('f-estado').value;
   const ft = document.getElementById('f-tipo-doc').value;
+  const fa = document.getElementById('f-anio').value;
+  const fm = document.getElementById('f-mes').value;
   const fp = document.getElementById('f-periodo').value.trim();
   const fd = document.getElementById('f-desde').value;
   const fh = document.getElementById('f-hasta').value;
@@ -305,18 +326,23 @@ function render(){
     (!ff || r.cuenta_responsable===ff) &&
     (!fe || r.estado===fe) &&
     (!ft || (r.tipo_documento||'Boleta')===ft) &&
+    (!fa || (r.fecha||'').slice(0,4)===fa) &&
+    (!fm || (r.fecha||'').slice(5,7)===fm) &&
     (!fp || (r.periodo||'').includes(fp)) &&
     (!fd || r.fecha >= fd) &&
     (!fh || r.fecha <= fh)
   );
   filtradosActuales = filtrados;
 
-  const pend = registros.filter(r=>r.estado==='pendiente');
-  const proc = registros.filter(r=>r.estado==='procesado');
+  // Los indicadores del panel reflejan la selección filtrada actual, no
+  // el total histórico — así se puede ver, por ejemplo, cuánto está
+  // pendiente solo para un mes o un responsable en particular.
+  const pend = filtrados.filter(r=>r.estado==='pendiente');
+  const proc = filtrados.filter(r=>r.estado==='procesado');
   document.getElementById('m-pend').textContent = pend.length;
   document.getElementById('m-monto-pend').textContent = fmtMonto(pend.reduce((s,r)=>s+Number(r.monto||0),0));
   document.getElementById('m-proc').textContent = proc.length;
-  document.getElementById('m-total').textContent = registros.length;
+  document.getElementById('m-total').textContent = filtrados.length;
 
   document.getElementById('export-count').textContent = filtrados.length;
   document.getElementById('export-monto').textContent = fmtMonto(filtrados.reduce((s,r)=>s+Number(r.monto||0),0));
