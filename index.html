@@ -251,22 +251,60 @@ function irADatos(){
   goStep(2);
 }
 
-function onFotoSel(ev){
+// Reducimos cada foto a un tamaño "imprimible" (de sobra para leerla a
+// simple vista y para el PDF consolidado) en vez de guardar el archivo
+// original sin comprimir. En un mes se pueden juntar muchas boletas, así
+// que esto importa tanto para no llenar el celular como para no colgar
+// la subida con mala señal.
+const FOTO_MAX_DIM = 1600;  // px del lado más largo
+const FOTO_CALIDAD = 0.72;  // calidad JPEG
+
+function comprimirImagen(file){
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if(width > FOTO_MAX_DIM || height > FOTO_MAX_DIM){
+        if(width >= height){
+          height = Math.round(height * FOTO_MAX_DIM / width);
+          width = FOTO_MAX_DIM;
+        } else {
+          width = Math.round(width * FOTO_MAX_DIM / height);
+          height = FOTO_MAX_DIM;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((blob) => {
+        if(!blob){ resolve(file); return; } // si falla la compresión, usamos el original
+        const nombre = (file.name || 'boleta').replace(/\.[a-zA-Z0-9]+$/, '') + '.jpg';
+        resolve(new File([blob], nombre, { type: 'image/jpeg' }));
+      }, 'image/jpeg', FOTO_CALIDAD);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); }; // si no se puede procesar, seguimos con el original
+    img.src = url;
+  });
+}
+
+async function onFotoSel(ev){
   const files = Array.from(ev.target.files || []);
   const esPrimeraTanda = fotos.length === 0;
-  files.forEach((file, idx) => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      fotos.push({file, dataUrl: e.target.result});
-      renderFotos();
-      // Solo intentamos leer automáticamente la primera foto que se agrega
-      // (se asume que es la boleta principal, de frente y legible)
-      if(esPrimeraTanda && idx === 0){
-        leerBoleta(e.target.result);
-      }
-    };
-    reader.readAsDataURL(file);
-  });
+  for(let idx=0; idx<files.length; idx++){
+    // Comprimimos antes de guardar en memoria: nunca trabajamos con el
+    // archivo original de celular a resolución completa (puede pesar
+    // 5-10MB cada uno) ni lo pasamos a texto base64.
+    const file = await comprimirImagen(files[idx]);
+    fotos.push({file, previewUrl: URL.createObjectURL(file)});
+    renderFotos();
+    // Solo intentamos leer automáticamente la primera foto que se agrega
+    // (se asume que es la boleta principal, de frente y legible)
+    if(esPrimeraTanda && idx === 0){
+      leerBoleta(file);
+    }
+  }
   ev.target.value = '';
 }
 
@@ -274,12 +312,16 @@ function renderFotos(){
   const grid = document.getElementById('foto-grid');
   grid.innerHTML = fotos.map((f,i) => `
     <div class="foto-thumb">
-      <img src="${f.dataUrl}">
+      <img src="${f.previewUrl}">
       <button class="foto-del" onclick="delFoto(${i})">✕</button>
     </div>`).join('');
 }
 
-function delFoto(i){ fotos.splice(i,1); renderFotos(); }
+function delFoto(i){
+  URL.revokeObjectURL(fotos[i].previewUrl);
+  fotos.splice(i,1);
+  renderFotos();
+}
 
 // ── Lectura automática de la boleta (OCR en el navegador, gratis) ──
 let ocrEnCurso = false;
@@ -290,12 +332,12 @@ function mostrarOcrEstado(texto, cargando){
   el.classList.add('show');
 }
 
-async function leerBoleta(dataUrl){
+async function leerBoleta(file){
   if(ocrEnCurso || typeof Tesseract === 'undefined') return;
   ocrEnCurso = true;
   mostrarOcrEstado('Leyendo la boleta para proponer fecha, monto y folio...', true);
   try{
-    const { data: { text } } = await Tesseract.recognize(dataUrl, 'spa');
+    const { data: { text } } = await Tesseract.recognize(file, 'spa');
     const monto = extraerMonto(text);
     const fecha = extraerFecha(text);
     const folio = extraerFolio(text);
@@ -438,8 +480,7 @@ async function enviarRendicion(){
     monto: Number(document.getElementById('f-monto').value),
     folio: document.getElementById('f-folio').value.trim() || null,
     centro_costo: document.getElementById('f-centro').value,
-    fotosDataUrls: fotos.map(f => f.dataUrl),
-    fotoNames: fotos.map(f => f.file.name)
+    fotos: fotos.map(f => f.file) // archivos originales, sin convertir a texto
   };
 
   try{
@@ -449,8 +490,16 @@ async function enviarRendicion(){
     mostrarConfirmacion(true);
   }catch(err){
     console.error(err);
-    guardarPendiente(payload);
-    mostrarConfirmacion(false);
+    try{
+      await guardarPendiente(payload);
+      mostrarConfirmacion(false);
+    }catch(err2){
+      console.error('No se pudo guardar como pendiente:', err2);
+      document.getElementById('enviado-icon').textContent = '⚠️';
+      document.getElementById('enviado-title').textContent = 'No se pudo enviar';
+      document.getElementById('enviado-msg').textContent = 'Hubo un problema al subir la rendición y tampoco pudimos guardarla en el celular. Revisa tu conexión e inténtalo de nuevo sin cerrar la app.';
+      goStep(3);
+    }
   }
   document.getElementById('btn-enviar').disabled = false;
   document.getElementById('btn-enviar').textContent = 'Enviar rendición →';
@@ -481,17 +530,17 @@ function extensionSegura(nombre){
 
 async function subirYGuardar(payload, onProgreso){
   const urls = [];
-  const total = payload.fotosDataUrls.length;
+  const total = payload.fotos.length;
   for(let i=0;i<total;i++){
     if(onProgreso) onProgreso(`Subiendo foto ${i+1} de ${total}...`);
-    const blob = await (await fetch(payload.fotosDataUrls[i])).blob();
+    const file = payload.fotos[i]; // ya viene comprimido desde onFotoSel, se sube directo sin pasar por texto
     const carpeta = sanitizarSegmento(payload.cuenta_responsable);
-    const ext = extensionSegura(payload.fotoNames[i]);
+    const ext = extensionSegura(file.name);
     const path = `${carpeta}/${Date.now()}_${i}.${ext}`;
     const up = await fetchConTimeout(`${SB_URL}/storage/v1/object/boletas/${path}`, {
       method:'POST',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':blob.type||'image/jpeg'},
-      body: blob
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':file.type||'image/jpeg'},
+      body: file
     });
     if(!up.ok) throw new Error(await up.text());
     urls.push(`${SB_URL}/storage/v1/object/public/boletas/${path}`);
@@ -515,16 +564,65 @@ async function subirYGuardar(payload, onProgreso){
   return ins.json();
 }
 
-function guardarPendiente(payload){
-  const q = JSON.parse(localStorage.getItem('rnd_pendientes') || '[]');
-  q.push(payload);
-  localStorage.setItem('rnd_pendientes', JSON.stringify(q));
-  actualizarBadgePendientes();
+// ── Cola de pendientes sin conexión (IndexedDB) ──────────────
+// localStorage solo guarda texto y tiene ~5-10MB de cupo total: al meter
+// fotos ahí (aunque ya vengan comprimidas) se llena fácil y falla en
+// silencio (QuotaExceededError sin capturar), que es lo que dejaba la app
+// "pegada" sin mostrar ni éxito ni el aviso de guardado sin conexión.
+// IndexedDB guarda los archivos (File/Blob) directamente y con mucho más
+// espacio disponible.
+const DB_NOMBRE = 'rendiciones_db';
+const DB_TIENDA = 'pendientes';
+
+function abrirDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NOMBRE, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if(!db.objectStoreNames.contains(DB_TIENDA)){
+        db.createObjectStore(DB_TIENDA, { keyPath: 'id', autoIncrement: true });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
 }
 
-function actualizarBadgePendientes(){
-  const q = JSON.parse(localStorage.getItem('rnd_pendientes') || '[]');
+async function guardarPendiente(payload){
+  const db = await abrirDB();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_TIENDA, 'readwrite');
+    tx.objectStore(DB_TIENDA).add(payload);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+  await actualizarBadgePendientes();
+}
+
+async function listarPendientes(){
+  const db = await abrirDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_TIENDA, 'readonly');
+    const req = tx.objectStore(DB_TIENDA).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function borrarPendiente(id){
+  const db = await abrirDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_TIENDA, 'readwrite');
+    tx.objectStore(DB_TIENDA).delete(id);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function actualizarBadgePendientes(){
   const badge = document.getElementById('pending-badge');
+  let q = [];
+  try{ q = await listarPendientes(); }catch(e){ console.error(e); }
   if(q.length > 0){
     badge.textContent = `${q.length} pendiente${q.length>1?'s':''} por enviar — toca para reintentar`;
     badge.classList.add('show');
@@ -534,15 +632,18 @@ function actualizarBadgePendientes(){
 }
 
 async function flushPendientes(){
-  const q = JSON.parse(localStorage.getItem('rnd_pendientes') || '[]');
+  let q = [];
+  try{ q = await listarPendientes(); }catch(e){ console.error(e); return; }
   if(q.length === 0) return;
-  const restantes = [];
-  for(const payload of q){
-    try{ await subirYGuardar(payload); }
-    catch(e){ restantes.push(payload); }
+  for(const item of q){
+    try{
+      await subirYGuardar(item);
+      await borrarPendiente(item.id);
+    }catch(e){
+      // se queda en la cola, se reintenta la próxima vez que vuelva la señal o se toque el aviso
+    }
   }
-  localStorage.setItem('rnd_pendientes', JSON.stringify(restantes));
-  actualizarBadgePendientes();
+  await actualizarBadgePendientes();
 }
 
 function mostrarConfirmacion(ok){
@@ -555,6 +656,7 @@ function mostrarConfirmacion(ok){
 }
 
 function nuevaRendicion(){
+  fotos.forEach(f => URL.revokeObjectURL(f.previewUrl));
   fotos = [];
   renderFotos();
   document.getElementById('f-motivo').value = '';
