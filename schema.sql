@@ -17,6 +17,7 @@ create table if not exists public.rendiciones (
   foto_urls           text[] not null default '{}',
   proveedor           text,            -- lo completa Claude leyendo la foto
   folio               text,            -- N° de boleta: lo detecta el OCR en terreno, el técnico lo valida, y Claude lo revisa al consolidar
+  tipo_documento      text not null default 'Boleta', -- 'Boleta' | 'Factura'
   categoria           text,            -- lo completa Claude leyendo la foto
   periodo             text,            -- ej: '2026-07', se asigna al consolidar
   estado              text not null default 'pendiente', -- 'pendiente' | 'procesado'
@@ -27,6 +28,7 @@ create table if not exists public.rendiciones (
 -- Migraciones por si la tabla ya existía de una corrida anterior
 alter table public.rendiciones add column if not exists cuenta_responsable text;
 alter table public.rendiciones add column if not exists responsable_rendicion text;
+alter table public.rendiciones add column if not exists tipo_documento text not null default 'Boleta';
 
 -- Si existe la columna vieja "tecnico" y todavía no se migró, la traspasamos
 do $$

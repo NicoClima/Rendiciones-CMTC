@@ -130,6 +130,11 @@ body{font-family:var(--font);background:#e0e0dc;min-height:100vh;padding:20px;di
             <option value="pendiente">Pendiente</option>
             <option value="procesado">Procesado</option>
           </select>
+          <select id="f-tipo-doc" onchange="render()">
+            <option value="">Boleta y Factura</option>
+            <option value="Boleta">Solo Boleta</option>
+            <option value="Factura">Solo Factura</option>
+          </select>
           <input type="text" id="f-periodo" placeholder="Período (ej: 2026-07)" oninput="render()">
           <label style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:4px;">Desde <input type="date" id="f-desde" onchange="render()"></label>
           <label style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:4px;">Hasta <input type="date" id="f-hasta" onchange="render()"></label>
@@ -291,6 +296,7 @@ function render(){
   const fr = document.getElementById('f-resp-rendicion').value;
   const ff = document.getElementById('f-fondo').value;
   const fe = document.getElementById('f-estado').value;
+  const ft = document.getElementById('f-tipo-doc').value;
   const fp = document.getElementById('f-periodo').value.trim();
   const fd = document.getElementById('f-desde').value;
   const fh = document.getElementById('f-hasta').value;
@@ -298,6 +304,7 @@ function render(){
     (!fr || r.responsable_rendicion===fr) &&
     (!ff || r.cuenta_responsable===ff) &&
     (!fe || r.estado===fe) &&
+    (!ft || (r.tipo_documento||'Boleta')===ft) &&
     (!fp || (r.periodo||'').includes(fp)) &&
     (!fd || r.fecha >= fd) &&
     (!fh || r.fecha <= fh)
@@ -324,7 +331,7 @@ function render(){
       <img class="tbl-thumb" src="${(r.foto_urls&&r.foto_urls[0])||''}" onerror="this.style.opacity=0">
       <div class="tbl-main">
         <div class="tbl-motivo">${r.motivo}</div>
-        <div class="tbl-meta">${r.responsable_rendicion} · ${r.fecha} · ${r.centro_costo} · fondo: ${r.cuenta_responsable||'—'}${r.folio?' · folio: '+r.folio:''}</div>
+        <div class="tbl-meta">${r.responsable_rendicion} · ${r.fecha} · ${r.centro_costo} · ${r.tipo_documento||'Boleta'} · fondo: ${r.cuenta_responsable||'—'}${r.folio?' · folio: '+r.folio:''}</div>
       </div>
       <div class="tbl-monto">${fmtMonto(r.monto)}</div>
       <span class="pill pill-${r.estado}">${r.estado}</span>
@@ -343,6 +350,7 @@ function verDetalle(id){
     <div class="modal-row"><span class="modal-key">Centro de Costo</span><span>${r.centro_costo}</span></div>
     <div class="modal-row"><span class="modal-key">Proveedor</span><span>${r.proveedor||'—'}</span></div>
     <div class="modal-row"><span class="modal-key">N° Folio</span><span>${r.folio||'—'}</span></div>
+    <div class="modal-row"><span class="modal-key">Tipo de Documento</span><span>${r.tipo_documento||'Boleta'}</span></div>
     <div class="modal-row"><span class="modal-key">Categoría</span><span>${r.categoria||'—'}</span></div>
     <div class="modal-row"><span class="modal-key">Período</span><span>${r.periodo||'—'}</span></div>
     <div class="modal-row"><span class="modal-key">Estado</span><span class="pill pill-${r.estado}">${r.estado}</span></div>
@@ -366,6 +374,7 @@ function descargarExcel(){
     'Responsable del Fondo': r.cuenta_responsable || '',
     'Proveedor': r.proveedor || '',
     'N° Folio': r.folio || '',
+    'Tipo de Documento': r.tipo_documento || 'Boleta',
     'Categoría': r.categoria || '',
     'Período': r.periodo || '',
     'Estado': r.estado,
@@ -375,7 +384,7 @@ function descargarExcel(){
   filas.push({});
   filas.push({'Fecha':'', 'Motivo':'TOTAL', 'Monto': total});
   const ws = XLSX.utils.json_to_sheet(filas);
-  ws['!cols'] = [{wch:12},{wch:32},{wch:12},{wch:16},{wch:18},{wch:18},{wch:22},{wch:14},{wch:16},{wch:10},{wch:12},{wch:32}];
+  ws['!cols'] = [{wch:12},{wch:32},{wch:12},{wch:16},{wch:18},{wch:18},{wch:22},{wch:14},{wch:14},{wch:16},{wch:10},{wch:12},{wch:32}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Rendiciones');
   XLSX.writeFile(wb, `rendiciones_${new Date().toISOString().slice(0,10)}.xlsx`);
@@ -416,7 +425,7 @@ async function descargarPDF(){
     doc.setFontSize(9);
     filtradosActuales.forEach((r,i) => {
       if(y > pageH - 60){ doc.addPage(); y = 50; }
-      const linea = `${i+1}. ${r.fecha} · ${r.motivo} · ${fmtMonto(r.monto)} · ${r.responsable_rendicion} · ${r.centro_costo}${r.folio?' · Folio: '+r.folio:''}`;
+      const linea = `${i+1}. ${r.fecha} · ${r.motivo} · ${fmtMonto(r.monto)} · ${r.responsable_rendicion} · ${r.centro_costo} · ${r.tipo_documento||'Boleta'}${r.folio?' · Folio: '+r.folio:''}`;
       doc.text(linea, margin, y);
       y += 14;
     });
@@ -429,7 +438,7 @@ async function descargarPDF(){
         doc.text(`${r.fecha}  ·  ${r.responsable_rendicion}  ·  ${fmtMonto(r.monto)}`, margin, 40);
         doc.setFontSize(9);
         doc.text(`Motivo: ${r.motivo}`, margin, 56);
-        doc.text(`Centro de Costo: ${r.centro_costo}   Fondo: ${r.cuenta_responsable||'—'}${r.folio?'   Folio: '+r.folio:''}`, margin, 70);
+        doc.text(`Centro de Costo: ${r.centro_costo}   Fondo: ${r.cuenta_responsable||'—'}   Tipo: ${r.tipo_documento||'Boleta'}${r.folio?'   Folio: '+r.folio:''}`, margin, 70);
         try{
           const dataUrl = await cargarImagenComoDataURL(urls[i]);
           const img = new Image();

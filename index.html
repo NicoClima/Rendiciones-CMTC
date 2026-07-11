@@ -166,6 +166,13 @@ body{font-family:var(--font);background:#e0e0dc;display:flex;align-items:flex-st
           <div class="hint">Referencia para validar la lectura automática — corrígelo si no calza con la boleta.</div>
         </div>
         <div class="field">
+          <label>Tipo de Documento *</label>
+          <select id="f-tipo-doc">
+            <option value="Boleta">Boleta</option>
+            <option value="Factura">Factura</option>
+          </select>
+        </div>
+        <div class="field">
           <label>Centro de Costo / Proyecto *</label>
           <select id="f-centro">
             <option value="">Cargando...</option>
@@ -458,9 +465,10 @@ function validar(){
   const motivo = document.getElementById('f-motivo').value.trim();
   const fecha = document.getElementById('f-fecha').value;
   const monto = document.getElementById('f-monto').value;
+  const tipoDoc = document.getElementById('f-tipo-doc').value;
   const centro = document.getElementById('f-centro').value;
   const respRendicion = document.getElementById('f-resp-rendicion').value;
-  return motivo && fecha && monto && centro && respRendicion && fotos.length > 0;
+  return motivo && fecha && monto && tipoDoc && centro && respRendicion && fotos.length > 0;
 }
 
 async function enviarRendicion(){
@@ -479,6 +487,7 @@ async function enviarRendicion(){
     fecha: document.getElementById('f-fecha').value,
     monto: Number(document.getElementById('f-monto').value),
     folio: document.getElementById('f-folio').value.trim() || null,
+    tipo_documento: document.getElementById('f-tipo-doc').value,
     centro_costo: document.getElementById('f-centro').value,
     fotos: fotos.map(f => f.file) // archivos originales, sin convertir a texto
   };
@@ -553,6 +562,7 @@ async function subirYGuardar(payload, onProgreso){
     fecha: payload.fecha,
     monto: payload.monto,
     folio: payload.folio,
+    tipo_documento: payload.tipo_documento,
     centro_costo: payload.centro_costo,
     foto_urls: urls,
     estado: 'pendiente'
@@ -662,6 +672,7 @@ function nuevaRendicion(){
   document.getElementById('f-motivo').value = '';
   document.getElementById('f-monto').value = '';
   document.getElementById('f-folio').value = '';
+  document.getElementById('f-tipo-doc').value = 'Boleta';
   document.getElementById('f-centro').value = '';
   document.getElementById('f-resp-rendicion').value = '';
   document.getElementById('f-fecha').value = new Date().toISOString().slice(0,10);
