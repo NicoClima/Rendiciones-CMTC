@@ -338,6 +338,19 @@ function render(){
     </div>`).join('');
 }
 
+// "Período" se auto-completa como mm-yyyy a partir de la Fecha del registro
+// (ej: 2026-07-10 → "07-2026"). El cierre de período masivo (pestaña
+// Rendiciones → "Marcar selección como procesada") sigue siendo manual y
+// puede sobrescribir este valor si se necesita otro criterio.
+function formatearPeriodo(fechaStr){
+  if(!fechaStr) return '';
+  const [y, m] = fechaStr.split('-');
+  if(!y || !m) return '';
+  return `${m}-${y}`;
+}
+
+const ESTILO_INPUT_MODAL = 'padding:4px 8px;border-radius:6px;border:0.5px solid var(--gray3);font-size:12px;font-family:var(--font);width:130px;';
+
 function verDetalle(id){
   const r = registros.find(x=>x.id===id);
   if(!r) return;
@@ -345,24 +358,68 @@ function verDetalle(id){
     <div class="modal-row"><span class="modal-key">Responsable Rendición</span><span>${r.responsable_rendicion}</span></div>
     <div class="modal-row"><span class="modal-key">Responsable del Fondo</span><span>${r.cuenta_responsable||'—'}</span></div>
     <div class="modal-row"><span class="modal-key">Motivo</span><span>${r.motivo}</span></div>
-    <div class="modal-row"><span class="modal-key">Fecha</span><span>${r.fecha}</span></div>
-    <div class="modal-row"><span class="modal-key">Monto</span><span>${fmtMonto(r.monto)}</span></div>
+    <div class="modal-row"><span class="modal-key">Fecha</span><span>
+      <input type="date" id="modal-fecha" value="${r.fecha||''}" oninput="document.getElementById('modal-periodo-preview').textContent = formatearPeriodo(this.value) || '—'" style="${ESTILO_INPUT_MODAL}">
+    </span></div>
+    <div class="modal-row"><span class="modal-key">Monto</span><span>
+      <input type="number" id="modal-monto" value="${r.monto}" inputmode="numeric" style="${ESTILO_INPUT_MODAL}">
+    </span></div>
     <div class="modal-row"><span class="modal-key">Centro de Costo</span><span>${r.centro_costo}</span></div>
-    <div class="modal-row"><span class="modal-key">Proveedor</span><span>${r.proveedor||'—'}</span></div>
-    <div class="modal-row"><span class="modal-key">N° Folio</span><span>${r.folio||'—'}</span></div>
+    <div class="modal-row"><span class="modal-key">Proveedor</span><span>
+      <input type="text" id="modal-proveedor" value="${r.proveedor||''}" placeholder="—" style="${ESTILO_INPUT_MODAL}">
+    </span></div>
+    <div class="modal-row"><span class="modal-key">N° Folio</span><span>
+      <input type="text" id="modal-folio" value="${r.folio||''}" placeholder="—" style="${ESTILO_INPUT_MODAL}">
+    </span></div>
     <div class="modal-row"><span class="modal-key">Tipo de Documento</span><span>
-      <select id="modal-tipo-doc" onchange="actualizarTipoDocumento(${r.id}, this.value)" style="padding:4px 8px;border-radius:6px;border:0.5px solid var(--gray3);font-size:12px;font-family:var(--font);">
+      <select id="modal-tipo-doc" onchange="actualizarTipoDocumento(${r.id}, this.value)" style="${ESTILO_INPUT_MODAL}">
         <option value="Boleta" ${(r.tipo_documento||'Boleta')==='Boleta'?'selected':''}>Boleta</option>
         <option value="Factura" ${r.tipo_documento==='Factura'?'selected':''}>Factura</option>
       </select>
     </span></div>
     <div class="modal-row"><span class="modal-key">Categoría</span><span>${r.categoria||'—'}</span></div>
-    <div class="modal-row"><span class="modal-key">Período</span><span>${r.periodo||'—'}</span></div>
+    <div class="modal-row"><span class="modal-key">Período</span><span id="modal-periodo-preview">${r.periodo || formatearPeriodo(r.fecha) || '—'}</span></div>
     <div class="modal-row"><span class="modal-key">Estado</span><span class="pill pill-${r.estado}">${r.estado}</span></div>
     ${r.notas_verificacion ? `<div class="modal-row"><span class="modal-key">Notas</span><span>${r.notas_verificacion}</span></div>` : ''}
+    <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+      <button id="modal-guardar" onclick="guardarEdicionModal(${r.id})" style="padding:8px 16px;border-radius:8px;border:none;background:var(--teal);color:#fff;font-weight:600;font-size:12px;cursor:pointer;">💾 Guardar cambios</button>
+    </div>
     <div class="modal-fotos">${(r.foto_urls||[]).map(u=>`<img src="${u}" onclick="window.open('${u}','_blank')">`).join('')}</div>
   `;
   document.getElementById('modal').classList.add('show');
+}
+
+// Guarda Proveedor, N° Folio, Monto y Fecha editados desde el detalle, y
+// recalcula el Período automáticamente a partir de la Fecha guardada.
+async function guardarEdicionModal(id){
+  const btn = document.getElementById('modal-guardar');
+  const proveedor = document.getElementById('modal-proveedor').value.trim();
+  const folio = document.getElementById('modal-folio').value.trim();
+  const montoStr = document.getElementById('modal-monto').value;
+  const fecha = document.getElementById('modal-fecha').value;
+  if(!fecha || montoStr === ''){ alert('Fecha y Monto no pueden quedar vacíos.'); return; }
+  const monto = Number(montoStr);
+  const periodo = formatearPeriodo(fecha);
+  const textoOriginal = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+  try{
+    const res = await fetch(`${SB_URL}/rest/v1/rendiciones?id=eq.${id}`, {
+      method:'PATCH', headers:{...H,'Prefer':'return=representation'},
+      body: JSON.stringify({ proveedor: proveedor || null, folio: folio || null, monto, fecha, periodo })
+    });
+    if(!res.ok) throw new Error(await res.text());
+    const r = registros.find(x=>x.id===id);
+    if(r){ r.proveedor = proveedor || null; r.folio = folio || null; r.monto = monto; r.fecha = fecha; r.periodo = periodo; }
+    render();
+    btn.textContent = '✓ Guardado';
+    setTimeout(() => { btn.textContent = textoOriginal; btn.disabled = false; }, 1200);
+  }catch(e){
+    console.error(e);
+    alert('No se pudo guardar los cambios. Revisa tu conexión e inténtalo de nuevo.');
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+  }
 }
 
 function cerrarModal(){ document.getElementById('modal').classList.remove('show'); }
@@ -470,11 +527,12 @@ async function descargarPDF(){
       doc.text('Ninguna de las rendiciones filtradas tiene fotos adjuntas.', margin, 60);
     } else {
       const cols = 3, filas = 4, porPagina = cols * filas;
-      const gap = 10;
-      const gridTop = 90;
-      const cellW = (pageW - margin*2 - gap*(cols-1)) / cols;
-      const cellH = (pageH - margin - gridTop - gap*(filas-1)) / filas;
-      const capH = 34; // alto reservado para el texto bajo cada foto
+      const gap = 6;           // antes 10 — menos espacio perdido entre celdas
+      const gridTop = 78;      // antes 90 — título más compacto arriba
+      const margenGrid = 24;   // antes usaba el margin general (32) también aquí
+      const cellW = (pageW - margenGrid*2 - gap*(cols-1)) / cols;
+      const cellH = (pageH - margenGrid - gridTop - gap*(filas-1)) / filas;
+      const capH = 24; // antes 34 — pie de foto más ajustado
       const imgAreaH = cellH - capH;
 
       for(let i=0; i<fotosFlat.length; i++){
@@ -486,7 +544,7 @@ async function descargarPDF(){
         }
         const col = posEnPagina % cols;
         const fila = Math.floor(posEnPagina / cols);
-        const cellX = margin + col*(cellW+gap);
+        const cellX = margenGrid + col*(cellW+gap);
         const cellY = gridTop + fila*(cellH+gap);
         const { r, url } = fotosFlat[i];
 
@@ -510,10 +568,10 @@ async function descargarPDF(){
         doc.setDrawColor(210);
         doc.rect(cellX, cellY, cellW, cellH);
         doc.setDrawColor(0);
-        doc.setFontSize(6.5);
-        doc.text(`${r.fecha} · ${r.tipo_documento||'Boleta'}`, cellX+3, cellY+imgAreaH+11);
-        doc.text(fmtMonto(r.monto), cellX+3, cellY+imgAreaH+20);
-        doc.text((r.motivo||'').slice(0,26), cellX+3, cellY+imgAreaH+29);
+        doc.setFontSize(5.8);
+        doc.text(`${r.fecha} · ${r.tipo_documento||'Boleta'}`, cellX+3, cellY+imgAreaH+8);
+        doc.text(fmtMonto(r.monto), cellX+3, cellY+imgAreaH+15);
+        doc.text((r.motivo||'').slice(0,28), cellX+3, cellY+imgAreaH+22);
       }
     }
 
