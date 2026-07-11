@@ -443,7 +443,9 @@ async function enviarRendicion(){
   };
 
   try{
-    await subirYGuardar(payload);
+    await subirYGuardar(payload, (msg) => {
+      document.getElementById('btn-enviar').textContent = msg;
+    });
     mostrarConfirmacion(true);
   }catch(err){
     console.error(err);
@@ -454,12 +456,24 @@ async function enviarRendicion(){
   document.getElementById('btn-enviar').textContent = 'Enviar rendición →';
 }
 
-async function subirYGuardar(payload){
+// fetch con límite de tiempo — en señal mala una subida puede quedarse
+// esperando indefinidamente; después de TIMEOUT_MS la damos por fallida
+// para que la app pase al modo "guardado sin conexión" en vez de trabarse.
+const TIMEOUT_MS = 25000;
+function fetchConTimeout(url, opciones){
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  return fetch(url, {...opciones, signal: controller.signal}).finally(() => clearTimeout(id));
+}
+
+async function subirYGuardar(payload, onProgreso){
   const urls = [];
-  for(let i=0;i<payload.fotosDataUrls.length;i++){
+  const total = payload.fotosDataUrls.length;
+  for(let i=0;i<total;i++){
+    if(onProgreso) onProgreso(`Subiendo foto ${i+1} de ${total}...`);
     const blob = await (await fetch(payload.fotosDataUrls[i])).blob();
     const path = `${payload.cuenta_responsable.replace(/\s+/g,'_')}/${Date.now()}_${i}_${payload.fotoNames[i]||'boleta.jpg'}`;
-    const up = await fetch(`${SB_URL}/storage/v1/object/boletas/${path}`, {
+    const up = await fetchConTimeout(`${SB_URL}/storage/v1/object/boletas/${path}`, {
       method:'POST',
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':blob.type||'image/jpeg'},
       body: blob
@@ -467,6 +481,7 @@ async function subirYGuardar(payload){
     if(!up.ok) throw new Error(await up.text());
     urls.push(`${SB_URL}/storage/v1/object/public/boletas/${path}`);
   }
+  if(onProgreso) onProgreso('Guardando datos...');
   const row = {
     cuenta_responsable: payload.cuenta_responsable,
     responsable_rendicion: payload.responsable_rendicion,
@@ -478,7 +493,7 @@ async function subirYGuardar(payload){
     foto_urls: urls,
     estado: 'pendiente'
   };
-  const ins = await fetch(`${SB_URL}/rest/v1/rendiciones`, {
+  const ins = await fetchConTimeout(`${SB_URL}/rest/v1/rendiciones`, {
     method:'POST', headers:{...H,'Prefer':'return=representation'}, body: JSON.stringify(row)
   });
   if(!ins.ok) throw new Error(await ins.text());
