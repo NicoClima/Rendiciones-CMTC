@@ -332,6 +332,10 @@ function render(){
     (!fd || r.fecha >= fd) &&
     (!fh || r.fecha <= fh)
   );
+  // Orden cronológico (fecha más antigua primero) — así queda igual en el
+  // listado en pantalla, el Excel y el PDF (tanto el resumen en texto como
+  // la cuadrícula de fotos, que reutilizan este mismo arreglo ordenado).
+  filtrados.sort((a,b) => (a.fecha||'').localeCompare(b.fecha||''));
   filtradosActuales = filtrados;
 
   // Los indicadores del panel reflejan la selección filtrada actual, no
@@ -361,6 +365,7 @@ function render(){
       </div>
       <div class="tbl-monto">${fmtMonto(r.monto)}</div>
       <span class="pill pill-${r.estado}">${r.estado}</span>
+      <button title="Eliminar" onclick="eliminarRendicion(${r.id}, event)" style="border:none;background:none;color:var(--red);font-size:15px;cursor:pointer;padding:2px 4px;flex-shrink:0;">🗑</button>
     </div>`).join('');
 }
 
@@ -407,7 +412,8 @@ function verDetalle(id){
     <div class="modal-row"><span class="modal-key">Período</span><span id="modal-periodo-preview">${r.periodo || formatearPeriodo(r.fecha) || '—'}</span></div>
     <div class="modal-row"><span class="modal-key">Estado</span><span class="pill pill-${r.estado}">${r.estado}</span></div>
     ${r.notas_verificacion ? `<div class="modal-row"><span class="modal-key">Notas</span><span>${r.notas_verificacion}</span></div>` : ''}
-    <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+    <div style="display:flex;justify-content:space-between;margin-top:12px;">
+      <button onclick="eliminarRendicion(${r.id})" style="padding:8px 16px;border-radius:8px;border:0.5px solid var(--red);background:#fff;color:var(--red-dark);font-weight:600;font-size:12px;cursor:pointer;">🗑 Eliminar</button>
       <button id="modal-guardar" onclick="guardarEdicionModal(${r.id})" style="padding:8px 16px;border-radius:8px;border:none;background:var(--teal);color:#fff;font-weight:600;font-size:12px;cursor:pointer;">💾 Guardar cambios</button>
     </div>
     <div class="modal-fotos">${(r.foto_urls||[]).map(u=>`<img src="${u}" onclick="window.open('${u}','_blank')">`).join('')}</div>
@@ -449,6 +455,28 @@ async function guardarEdicionModal(id){
 }
 
 function cerrarModal(){ document.getElementById('modal').classList.remove('show'); }
+
+// Elimina un registro (ej. cuando quedó duplicado). Pide confirmación antes
+// de borrar y solo borra la fila de la base de datos — no borra la foto ya
+// subida al bucket de Storage.
+async function eliminarRendicion(id, ev){
+  if(ev) ev.stopPropagation(); // evita que el click también abra el detalle
+  const r = registros.find(x=>x.id===id);
+  const detalle = r ? `${r.fecha} · ${r.motivo} · ${fmtMonto(r.monto)}` : `registro #${id}`;
+  if(!confirm(`¿Eliminar esta rendición?\n\n${detalle}\n\nEsta acción no se puede deshacer.`)) return;
+  try{
+    const res = await fetch(`${SB_URL}/rest/v1/rendiciones?id=eq.${id}`, {
+      method:'DELETE', headers: H
+    });
+    if(!res.ok) throw new Error(await res.text());
+    registros = registros.filter(x => x.id !== id);
+    cerrarModal();
+    render();
+  }catch(e){
+    console.error(e);
+    alert('No se pudo eliminar. Revisa tu conexión e inténtalo de nuevo.');
+  }
+}
 
 // Permite corregir Boleta/Factura caso a caso, por si el OCR o la persona
 // en terreno se equivocó al elegirlo.

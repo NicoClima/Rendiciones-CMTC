@@ -62,6 +62,15 @@ create policy "rendiciones_update_anon"
   using (true)
   with check (true);
 
+-- Se agregó política de DELETE para poder borrar registros duplicados
+-- desde el panel de administración (con confirmación en pantalla antes
+-- de borrar). No borra las fotos ya subidas al bucket, solo la fila.
+drop policy if exists "rendiciones_delete_anon" on public.rendiciones;
+create policy "rendiciones_delete_anon"
+  on public.rendiciones for delete
+  to anon
+  using (true);
+
 -- 2) Responsables del Fondo (editable desde el panel admin, pestaña "Responsables del Fondo")
 create table if not exists public.cuentas_responsables (
   id      bigint generated always as identity primary key,
@@ -196,6 +205,7 @@ create policy "boletas_anon_upload"
 --   panel admin y para que Claude pueda leerlas al consolidar. Si las
 --   boletas muestran datos sensibles y prefieres que no sean públicas,
 --   avísame y cambiamos a bucket privado + URLs firmadas.
--- - No se agregó política de DELETE a propósito (nadie puede borrar
---   registros por accidente desde la app).
+-- - Sí existe política de DELETE en "rendiciones", para poder borrar
+--   registros duplicados desde el panel admin. El propio admin.html pide
+--   confirmación antes de borrar, y no hay forma de borrar desde index.html.
 -- ============================================================
