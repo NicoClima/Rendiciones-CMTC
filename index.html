@@ -2228,90 +2228,126 @@ function cargarLibsPDF(){
   });
 }
 
+async function _prepararPDFCompartir(r){
+  await cargarLibsPDF();
+  var htmlClean=construirHTMLGuia(r);
+
+  // Renderizar el HTML en un iframe oculto para poder capturarlo
+  var iframe=document.createElement('iframe');
+  iframe.style.position='fixed';
+  iframe.style.left='-9999px';
+  iframe.style.width='816px'; // ancho carta a 96dpi
+  iframe.style.height='1056px';
+  document.body.appendChild(iframe);
+  iframe.srcdoc=htmlClean;
+
+  await new Promise(function(resolve){ iframe.onload=resolve; });
+  if(iframe.contentDocument.fonts && iframe.contentDocument.fonts.ready){
+    try{ await iframe.contentDocument.fonts.ready; }catch(e){}
+  }
+  // Esperar a que las fotos (si las hay) terminen de cargar
+  var imgs=iframe.contentDocument.querySelectorAll('img');
+  await Promise.all(Array.prototype.map.call(imgs,function(img){
+    if(img.complete) return Promise.resolve();
+    return new Promise(function(res){ img.onload=img.onerror=res; });
+  }));
+  await new Promise(function(res){ setTimeout(res,300); });
+
+  var paginas=iframe.contentDocument.querySelectorAll('.page');
+  if(!paginas.length) throw new Error('No se encontró contenido para generar el PDF');
+
+  var jsPDFLib=window.jspdf.jsPDF;
+  var pdf=new jsPDFLib({unit:'pt',format:'letter'});
+  var pageW=pdf.internal.pageSize.getWidth();
+  var pageH=pdf.internal.pageSize.getHeight();
+
+  for(var i=0;i<paginas.length;i++){
+    var canvas=await html2canvas(paginas[i],{
+      scale:1.6,           // suficiente nitidez para impresión básica, sin pesar demasiado
+      useCORS:true,
+      backgroundColor:'#ffffff',
+      windowWidth:816,
+    });
+    var imgData=canvas.toDataURL('image/jpeg',0.72); // JPEG comprimido para mantenerlo liviano
+    var imgH=(canvas.height*pageW)/canvas.width;
+    if(i>0) pdf.addPage();
+    pdf.addImage(imgData,'JPEG',0,0,pageW,Math.min(imgH,pageH));
+  }
+
+  document.body.removeChild(iframe);
+
+  var pdfBlob=pdf.output('blob');
+  var numGuia=r.numero_guia||'guia';
+  var nombreArchivo='Guia_Servicio_'+numGuia.replace(/[^a-zA-Z0-9-]/g,'_')+'.pdf';
+  var pdfFile=new File([pdfBlob],nombreArchivo,{type:'application/pdf'});
+  return {pdfBlob:pdfBlob, pdfFile:pdfFile, nombreArchivo:nombreArchivo, numGuia:numGuia, cliente:r.cliente||''};
+}
+
+function _descargarPDFDirecto(prep){
+  var urlDescarga=URL.createObjectURL(prep.pdfBlob);
+  var a=document.createElement('a');
+  a.href=urlDescarga;
+  a.download=prep.nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(urlDescarga);},2000);
+  alert('PDF descargado. Búscalo en tu carpeta de Descargas para reenviarlo por WhatsApp o correo.');
+}
+
 async function compartirGuiaPDF(r, btnEl){
-  var textoOriginal=btnEl?btnEl.textContent:'';
-  if(btnEl){ btnEl.textContent='⏳ Generando PDF...'; btnEl.disabled=true; }
+  var textoOriginal=btnEl?btnEl.getAttribute('data-texto-original')||btnEl.textContent:'';
+  if(btnEl){ btnEl.setAttribute('data-texto-original', textoOriginal); btnEl.textContent='⏳ Generando PDF...'; btnEl.disabled=true; }
   try{
-    await cargarLibsPDF();
-    var htmlClean=construirHTMLGuia(r);
-
-    // Renderizar el HTML en un iframe oculto para poder capturarlo
-    var iframe=document.createElement('iframe');
-    iframe.style.position='fixed';
-    iframe.style.left='-9999px';
-    iframe.style.width='816px'; // ancho carta a 96dpi
-    iframe.style.height='1056px';
-    document.body.appendChild(iframe);
-    iframe.srcdoc=htmlClean;
-
-    await new Promise(function(resolve){ iframe.onload=resolve; });
-    if(iframe.contentDocument.fonts && iframe.contentDocument.fonts.ready){
-      try{ await iframe.contentDocument.fonts.ready; }catch(e){}
-    }
-    // Esperar a que las fotos (si las hay) terminen de cargar
-    var imgs=iframe.contentDocument.querySelectorAll('img');
-    await Promise.all(Array.prototype.map.call(imgs,function(img){
-      if(img.complete) return Promise.resolve();
-      return new Promise(function(res){ img.onload=img.onerror=res; });
-    }));
-    await new Promise(function(res){ setTimeout(res,300); });
-
-    var paginas=iframe.contentDocument.querySelectorAll('.page');
-    if(!paginas.length) throw new Error('No se encontró contenido para generar el PDF');
-
-    var jsPDFLib=window.jspdf.jsPDF;
-    var pdf=new jsPDFLib({unit:'pt',format:'letter'});
-    var pageW=pdf.internal.pageSize.getWidth();
-    var pageH=pdf.internal.pageSize.getHeight();
-
-    for(var i=0;i<paginas.length;i++){
-      var canvas=await html2canvas(paginas[i],{
-        scale:1.6,           // suficiente nitidez para impresión básica, sin pesar demasiado
-        useCORS:true,
-        backgroundColor:'#ffffff',
-        windowWidth:816,
-      });
-      var imgData=canvas.toDataURL('image/jpeg',0.72); // JPEG comprimido para mantenerlo liviano
-      var imgH=(canvas.height*pageW)/canvas.width;
-      if(i>0) pdf.addPage();
-      pdf.addImage(imgData,'JPEG',0,0,pageW,Math.min(imgH,pageH));
-    }
-
-    document.body.removeChild(iframe);
-
-    var pdfBlob=pdf.output('blob');
-    var numGuia=r.numero_guia||'guia';
-    var nombreArchivo='Guia_Servicio_'+numGuia.replace(/[^a-zA-Z0-9-]/g,'_')+'.pdf';
-    var pdfFile=new File([pdfBlob],nombreArchivo,{type:'application/pdf'});
-
-    // Intentar compartir de forma nativa (WhatsApp, email, guardar, etc.)
-    if(navigator.canShare && navigator.canShare({files:[pdfFile]})){
-      await navigator.share({
-        files:[pdfFile],
-        title:'Guía de Servicio '+numGuia,
-        text:'Guía de servicio '+numGuia+' - '+(r.cliente||''),
-      });
+    var prep=await _prepararPDFCompartir(r);
+    if(navigator.canShare && navigator.canShare({files:[prep.pdfFile]})){
+      // No se llama a navigator.share() aquí mismo: generar el PDF toma varios segundos
+      // (render + captura de cada página) y para entonces el navegador puede considerar
+      // que ya no hay un "gesto de usuario" reciente, rechazando el share con
+      // "The request is not allowed by the user agent or the platform in the current
+      // context" (confirmado en prueba real en celular). Dejamos el PDF listo y pedimos
+      // un segundo toque, que sí cuenta como gesto fresco para el navegador.
+      window._pdfCompartirListo=prep;
+      if(btnEl){
+        btnEl.textContent='📤 Toca para compartir';
+        btnEl.disabled=false;
+        btnEl.onclick=function(){ compartirGuiaPDFConfirmar(btnEl); };
+      }
     } else {
-      // Sin soporte de compartir: descargar directo
-      var urlDescarga=URL.createObjectURL(pdfBlob);
-      var a=document.createElement('a');
-      a.href=urlDescarga;
-      a.download=nombreArchivo;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(function(){URL.revokeObjectURL(urlDescarga);},2000);
-      alert('PDF descargado. Búscalo en tu carpeta de Descargas para reenviarlo por WhatsApp o correo.');
+      _descargarPDFDirecto(prep);
+      if(btnEl){ btnEl.textContent=textoOriginal; btnEl.disabled=false; }
     }
+  }catch(e){
+    console.error('Error generando PDF compartible:',e);
+    alert('No se pudo generar el PDF para compartir: '+e.message);
+    if(btnEl){ btnEl.textContent=textoOriginal; btnEl.disabled=false; }
+  }
+}
+
+async function compartirGuiaPDFConfirmar(btnEl){
+  var prep=window._pdfCompartirListo;
+  var textoOriginal=btnEl?(btnEl.getAttribute('data-texto-original')||'📤 Compartir guía (WhatsApp / correo)'):'';
+  if(!prep){ return; }
+  try{
+    await navigator.share({
+      files:[prep.pdfFile],
+      title:'Guía de Servicio '+prep.numGuia,
+      text:'Guía de servicio '+prep.numGuia+' - '+prep.cliente,
+    });
   }catch(e){
     if(e && e.name==='AbortError'){
       // Usuario canceló el share sheet, no es un error real
     } else {
-      console.error('Error generando PDF compartible:',e);
-      alert('No se pudo generar el PDF para compartir: '+e.message);
+      console.error('Error al compartir PDF:',e);
+      alert('No se pudo abrir el panel de compartir: '+e.message+'. Se descargará el PDF para que lo puedas reenviar manualmente.');
+      _descargarPDFDirecto(prep);
     }
   } finally {
-    if(btnEl){ btnEl.textContent=textoOriginal; btnEl.disabled=false; }
+    if(btnEl){
+      btnEl.textContent=textoOriginal;
+      btnEl.disabled=false;
+      btnEl.onclick=function(){ compartirGuiaPDF(window._ultimoReporteEnviado, btnEl); };
+    }
   }
 }
 
