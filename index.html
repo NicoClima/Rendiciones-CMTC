@@ -2012,13 +2012,17 @@ ${(()=>{
   const statusBg=hayProblemas?C.redL:(hayAlertas?C.amberL:C.greenL);
   const statusBorder=hayProblemas?C.redD:(hayAlertas?'#EF9F27':C.greenD);
   const statusTxt=hayProblemas?'Requiere atención':(hayAlertas?'Con observaciones':'Visita completada');
+  const eqCompacto=secciones.length>8;
   const eqMiniHTML=secciones.map(s=>{
     const nAl=(s.items||[]).filter(i=>i.estado==='alerta').length;
     const nPr=(s.items||[]).filter(i=>i.estado==='problema').length;
     let pillBg=C.greenL,pillFg=C.greenD,pillTxt='Todo OK';
     if(nPr>0){pillBg=C.redL;pillFg=C.redD;pillTxt=nPr+(nPr>1?' problemas':' problema');}
     else if(nAl>0){pillBg=C.amberL;pillFg=C.amberD;pillTxt=nAl+(nAl>1?' alertas':' alerta');}
-    return `<div class="eq-mini"><div class="eq-mini-name">${s.label}</div><span class="eq-mini-pill" style="background:${pillBg};color:${pillFg};">${pillTxt}</span></div>`;
+    const miniStyle=eqCompacto?'padding:3px 7px;margin-bottom:3px;':'';
+    const nameStyle=eqCompacto?'font-size:8.5px;':'';
+    const pillStyle=eqCompacto?'font-size:7px;padding:1px 6px;':'';
+    return `<div class="eq-mini" style="${miniStyle}"><div class="eq-mini-name" style="${nameStyle}">${s.label}</div><span class="eq-mini-pill" style="background:${pillBg};color:${pillFg};${pillStyle}">${pillTxt}</span></div>`;
   }).join('');
   return `
   <div class="status-strip" style="background:${statusBg};border:1px solid ${statusBorder};">
@@ -2036,7 +2040,7 @@ ${(()=>{
   </div>
   <div class="sec-title" style="margin-top:2px;"><div class="sec-bar"></div><div class="sec-label">Equipos — vista rápida</div></div>
   <div class="sec-line"></div>
-  ${eqMiniHTML}
+  <div style="${eqCompacto?'display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;':''}">${eqMiniHTML}</div>
   `;
 })()}
 
