@@ -77,6 +77,11 @@ body{font-family:var(--font);background:#e0e0dc;display:flex;align-items:flex-st
 .eq-detail{font-size:11px;color:var(--text3);margin-top:1px;}
 .eq-desc{font-size:11px;color:var(--teal-dark);margin-top:2px;font-style:italic;}
 .eq-badge{font-size:10px;padding:2px 8px;border-radius:10px;background:var(--teal-light);color:var(--teal-dark);font-weight:500;margin-left:auto;flex-shrink:0;}
+.agw-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--gray2);cursor:pointer;}
+.agw-item:last-child{border-bottom:none;}
+.agw-item:active{opacity:0.7;}
+.agw-name{font-size:13px;font-weight:600;flex:1;}
+.agw-detail{font-size:11px;color:var(--text3);margin-top:1px;}
 .sec-header{display:flex;align-items:center;gap:8px;padding:8px 0 10px;border-bottom:0.5px solid var(--gray2);margin-bottom:10px;}
 .sec-icon-big{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
 .sec-header-title{font-size:14px;font-weight:600;flex:1;}
@@ -380,6 +385,10 @@ body{padding:12px;justify-content:center;background:#1D9E75;}
     <div class="step-body">
       <div class="dots"><div class="dot active"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
       <div style="height:8px;"></div>
+      <div class="card" id="agenda-wizard-card" style="display:none;"><div class="card-body">
+        <div class="slabel">📋 Tareas de hoy</div>
+        <div id="agenda-wizard-lista"></div>
+      </div></div>
       <div class="card"><div class="card-body">
         <div class="slabel">Datos de la visita</div>
         <div class="field"><label>Cliente *</label>
@@ -678,6 +687,7 @@ function onTecnicoChangeS0(){
 async function confirmarTecnico(){
   var tecnico = getTecnico();
   if(!tecnico) return;
+  if(typeof cargarAgendaWizard==='function') cargarAgendaWizard(); // aislado, no bloquea el flujo
   var b = leerBorrador();
   if(b && (Date.now()-b.timestamp <= 12*60*60*1000)){
     verificarBorrador(); // construye el texto y muestra el modal, ya scoped a este técnico
@@ -1736,6 +1746,11 @@ async function enviar(){
     document.getElementById('enviado-id').textContent='Guia N° '+(reporte?.numero_guia||numGuia);
     activarStep('s-enviado');
     borrarBorrador();
+    // Reflejar en la agenda del día, si esta visita correspondía a una tarea programada (aislado, no crítico)
+    // Para clientes Nuevo/Particular no hay cliente_id real, así que se pasa null y se matchea por nombre.
+    if(typeof agendaAutoCompletar==='function'){
+      agendaAutoCompletar(esSpot?null:clienteSel?.id, clienteSel?.nombre, fecha, tecnico, reporte?.id);
+    }
     // Si es cliente particular, registrar/actualizar en tabla de seguimiento
     if(esSpot){
       registrarSeguimientoParticular({
@@ -1762,7 +1777,7 @@ function reiniciar(){
   var sw=document.getElementById('spot-wrap');if(sw)sw.style.display='none';
   var sn=document.getElementById('spot-nombre');if(sn)sn.value='';
   var sd=document.getElementById('spot-direccion');if(sd)sd.value='';
-  var sc=document.getElementById('spot-contacto');if(sc)sc.value='';document.getElementById('btn-iniciar').disabled=true;document.getElementById('nota-registro').value='';document.getElementById('recepciona-nombre').value='';document.getElementById('tecnico-otro-wrap').style.display='none';document.getElementById('tecnico-otro').value='';var _fd=document.getElementById('visita-fecha');if(_fd)_fd.value=new Date().toISOString().split('T')[0];limpiarFirma();activarStep('s1');}
+  var sc=document.getElementById('spot-contacto');if(sc)sc.value='';document.getElementById('btn-iniciar').disabled=true;document.getElementById('nota-registro').value='';document.getElementById('recepciona-nombre').value='';document.getElementById('tecnico-otro-wrap').style.display='none';document.getElementById('tecnico-otro').value='';var _fd=document.getElementById('visita-fecha');if(_fd)_fd.value=new Date().toISOString().split('T')[0];limpiarFirma();if(typeof cargarAgendaWizard==='function')cargarAgendaWizard();activarStep('s1');}
 function togglePresup(){document.getElementById('presup-wrap').style.display=document.getElementById('req-presup').checked?'block':'none';}
 
 function initFirma(){
@@ -1808,7 +1823,7 @@ function construirHTMLGuia(r){
     gris1:'#E8E4DC', gris2:'#B0ADA6', gris3:'#6E6B65',
     greenL:'#E6F4EA', greenD:'#1E6B2E',
     amberL:'#FEF3E2', amberD:'#7A4100',
-    redL:'#FDECEA', redD:'#8B0000',
+    redL:'#FDECEA', redD:'#ED1C24',
     blueL:'#E3F4FD',
   };
 
@@ -1867,9 +1882,12 @@ function construirHTMLGuia(r){
 <head>
 <meta charset="UTF-8">
 <title>Guia de Servicio N° ${numGuia}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:Arial,Helvetica,sans-serif;font-size:10px;color:${C.tinta};background:#fff;}
+  body{font-family:'IBM Plex Sans',Arial,Helvetica,sans-serif;font-size:10px;color:${C.tinta};background:#fff;}
   @page{size:letter;margin:14mm 18mm 20mm 18mm;}
   @media print{
     body{margin:0;}
@@ -1893,15 +1911,15 @@ function construirHTMLGuia(r){
   .gs-head-border2{height:1px;background:${C.cian};margin-bottom:12px;}
   .logo{height:42px;}
   .gs-num-block{text-align:right;min-width:160px;}
-  .gs-num-label{font-size:7.5px;color:${C.gris3};margin-bottom:2px;}
-  .gs-num{font-size:26px;font-weight:700;color:${C.naranja};line-height:1;margin-bottom:4px;}
+  .gs-num-label{font-family:'IBM Plex Mono',monospace;font-size:7px;text-transform:uppercase;letter-spacing:.12em;color:${C.gris3};margin-bottom:2px;}
+  .gs-num{font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:700;color:${C.naranja};line-height:1;margin-bottom:4px;letter-spacing:-0.015em;}
   .gs-tipo{display:inline-block;background:${C.oscuro};color:#fff;
-    font-size:7.5px;font-weight:700;padding:3px 10px;border-radius:3px;}
+    font-size:7.5px;font-weight:700;padding:3px 10px;border-radius:3px;font-family:'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;}
 
   /* SECCIONES */
   .sec-title{display:flex;align-items:center;gap:6px;margin:12px 0 6px;}
   .sec-bar{width:3px;height:20px;background:${C.naranja};border-radius:1px;flex-shrink:0;}
-  .sec-label{font-size:10px;font-weight:700;color:${C.oscuro};text-transform:uppercase;letter-spacing:.05em;}
+  .sec-label{font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:600;color:${C.oscuro};text-transform:uppercase;letter-spacing:.05em;}
   .sec-line{height:0.5px;background:${C.gris1};margin-bottom:6px;}
 
   /* DATA BOX */
@@ -1910,7 +1928,7 @@ function construirHTMLGuia(r){
   .data-col{padding:0 10px;}
   .data-col:first-child{border-right:0.5px solid ${C.gris1};}
   .data-row{display:flex;gap:4px;margin-bottom:4px;}
-  .data-key{font-size:8.5px;color:${C.gris3};width:72px;flex-shrink:0;}
+  .data-key{font-family:'IBM Plex Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:.04em;color:${C.gris3};width:72px;flex-shrink:0;}
   .data-val{font-size:9px;font-weight:700;color:${C.tinta};}
 
   /* OBSERVACIONES */
@@ -1923,18 +1941,18 @@ function construirHTMLGuia(r){
   .status-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
   .status-txt{font-size:10px;font-weight:700;}
   .status-sub{font-size:9px;margin-left:auto;}
-  .score-label{font-size:9px;font-weight:700;color:${C.oscuro};text-transform:uppercase;letter-spacing:.06em;margin:2px 0 8px;display:flex;align-items:center;gap:6px;}
+  .score-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:600;color:${C.oscuro};text-transform:uppercase;letter-spacing:.06em;margin:2px 0 8px;display:flex;align-items:center;gap:6px;}
   .score-bar{width:3px;height:13px;background:${C.naranja};border-radius:1px;}
   .score-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:6px;}
   .score-card{border-radius:8px;padding:10px 4px;text-align:center;}
-  .score-val{font-size:22px;font-weight:700;line-height:1;}
-  .score-lbl{font-size:7.5px;margin-top:4px;font-weight:600;letter-spacing:.02em;}
+  .score-val{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;line-height:1;}
+  .score-lbl{font-family:'IBM Plex Mono',monospace;font-size:7px;margin-top:4px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;}
   .eq-mini{display:flex;align-items:center;gap:8px;background:${C.fondo};border-radius:6px;padding:6px 10px;margin-bottom:5px;page-break-inside:avoid;break-inside:avoid;}
   .eq-mini-name{font-size:9.5px;font-weight:700;flex:1;color:${C.tinta};}
   .eq-mini-pill{font-size:8px;font-weight:700;padding:2px 8px;border-radius:10px;}
   .metric{border-radius:4px;padding:6px;text-align:center;border:0.5px solid ${C.gris1};}
-  .metric-val{font-size:18px;font-weight:700;line-height:1;}
-  .metric-lbl{font-size:7px;color:${C.gris3};margin-top:2px;}
+  .metric-val{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;line-height:1;}
+  .metric-lbl{font-family:'IBM Plex Mono',monospace;font-size:6.5px;color:${C.gris3};margin-top:2px;text-transform:uppercase;letter-spacing:.04em;}
 
   /* FIRMA */
   .firma-wrap{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:8px;}
@@ -1947,13 +1965,13 @@ function construirHTMLGuia(r){
   .gs-footer{position:fixed;bottom:0;left:0;right:0;background:#fff;}
   .footer-bar{height:1.5px;background:${C.cian};}
   .footer-content{display:flex;justify-content:space-between;padding:4px 18mm 0;font-size:7.5px;color:${C.gris3};}
-  .footer-bold{font-weight:700;color:${C.oscuro};}
+  .footer-bold{font-family:'Space Grotesk',sans-serif;font-weight:600;color:${C.oscuro};}
 
   /* FOTOS PAGE */
   .foto-page-head{display:flex;justify-content:space-between;align-items:center;
     padding-bottom:6px;border-bottom:1.5px solid ${C.cian};margin-bottom:12px;}
-  .foto-page-title{font-size:10px;font-weight:700;color:${C.oscuro};}
-  .foto-page-meta{font-size:8px;color:${C.gris3};}
+  .foto-page-title{font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;color:${C.oscuro};}
+  .foto-page-meta{font-family:'IBM Plex Mono',monospace;font-size:7.5px;color:${C.gris3};}
   .foto-eq-head{background:${C.oscuro};color:#fff;font-size:10px;font-weight:700;
     padding:5px 8px;border-radius:4px;margin:10px 0 6px;}
   .foto-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;}
@@ -1980,6 +1998,7 @@ function construirHTMLGuia(r){
     <div class="gs-num-label">GUÍA DE SERVICIO</div>
     <div class="gs-num">N° ${numGuia}</div>
     <span class="gs-tipo">${r.tipo_visita?.toUpperCase()||'VISITA'}</span>
+    <div style="display:flex;justify-content:flex-end;margin-top:3px;"><span style="width:36px;height:5px;background:#00AEEF;transform:skewX(-18deg);display:block;"></span></div>
   </div>
 </div>
 <div class="gs-head-border2"></div>
@@ -2092,7 +2111,7 @@ ${r.req_presup&&r.presup_desc?`<div class="obs-box" style="border-color:#EF9F27;
     <div style="height:44px;"></div>
     <div class="firma-line"></div>
     <div class="firma-nombre">${r.tecnico||'___________________'}</div>
-    <div class="firma-rol">Técnico Climatermic</div>
+    <div class="firma-rol">Técnico IS Climatermic</div>
   </div>
 </div>
 
@@ -2100,7 +2119,7 @@ ${r.req_presup&&r.presup_desc?`<div class="obs-box" style="border-color:#EF9F27;
 <div class="gs-footer">
   <div class="footer-bar"></div>
   <div class="footer-content">
-    <div><span class="footer-bold">Climatermic Ingeniería y Servicios</span><br>www.climatermic.cl  ·  servicios@climatermic.cl  ·  +562 2 372 7585</div>
+    <div><span class="footer-bold">Ingeniería y Servicios Climatermic</span><br>www.climatermic.cl  ·  servicios@climatermic.cl  ·  +562 2 372 7585</div>
     <div style="text-align:right;">Guía N° ${numGuia}  ·  ${r.fecha||'—'}</div>
   </div>
 </div>
@@ -2222,6 +2241,9 @@ async function compartirGuiaPDF(r, btnEl){
     iframe.srcdoc=htmlClean;
 
     await new Promise(function(resolve){ iframe.onload=resolve; });
+    if(iframe.contentDocument.fonts && iframe.contentDocument.fonts.ready){
+      try{ await iframe.contentDocument.fonts.ready; }catch(e){}
+    }
     // Esperar a que las fotos (si las hay) terminen de cargar
     var imgs=iframe.contentDocument.querySelectorAll('img');
     await Promise.all(Array.prototype.map.call(imgs,function(img){
@@ -2486,6 +2508,95 @@ async function cargarTecnicosWizard(){
   // Si no hay red ni caché, se mantiene la lista fija incluida en el HTML como último respaldo
 }
 
+// ── Agenda de tareas diarias (bloque "Tareas de hoy" post Paso 0) ──
+// Aislado con try/catch propio: si falla, no debe bloquear el resto del wizard.
+async function cargarAgendaWizard(){
+  var card=document.getElementById('agenda-wizard-card');
+  var cont=document.getElementById('agenda-wizard-lista');
+  if(!card||!cont) return;
+  try{
+    if(!navigator.onLine){ card.style.display='none'; return; }
+    var tecnico=getTecnico();
+    var hoy=new Date().toISOString().split('T')[0];
+    var tareas=await sbGet('tareas_dia','fecha=eq.'+hoy+'&estado=eq.pendiente&order=cliente_nombre.asc');
+    var visibles=(tareas||[]).filter(function(t){
+      var asignados=t.tecnicos_asignados;
+      return !asignados || !asignados.length || asignados.indexOf(tecnico)!==-1;
+    });
+    if(!visibles.length){
+      cont.innerHTML='<div style="font-size:12px;color:var(--text3);padding:6px 0;">Sin tareas preasignadas</div>';
+      card.style.display='block';
+      return;
+    }
+    cont.innerHTML=visibles.map(function(t){
+      var esSpotTarea=!t.cliente_id;
+      var direccion=esSpotTarea
+        ? (t.cliente_direccion||'')
+        : ((clientes||[]).find(function(c){return c.id===t.cliente_id;})||{}).direccion||'';
+      var dirHtml=direccion
+        ? '<div class="agw-detail">📍 '+String(direccion).replace(/</g,'&lt;')+'</div>'
+        : '';
+      var notaHtml=t.notas
+        ? '<div style="font-size:11px;color:var(--amber-dark);background:var(--amber-light);border-radius:6px;padding:3px 7px;margin-top:4px;">📝 '+String(t.notas).replace(/</g,'&lt;')+'</div>'
+        : (direccion ? '' : '<div class="agw-detail">Toca para preseleccionar</div>');
+      var onclickAttr;
+      if(esSpotTarea){
+        var nombreEsc=String(t.cliente_nombre||'').replace(/'/g,"\\'");
+        var dirEsc=String(t.cliente_direccion||'').replace(/'/g,"\\'");
+        onclickAttr='agendaWizardSeleccionarSpot(\''+nombreEsc+'\',\''+dirEsc+'\')';
+      } else {
+        var idSeguro=(t.cliente_id||'').replace(/'/g,'');
+        onclickAttr='agendaWizardSeleccionar(\''+idSeguro+'\')';
+      }
+      var badge=esSpotTarea?'Particular':'Pendiente';
+      return '<div class="agw-item" onclick="'+onclickAttr+'">'
+        +'<div style="flex:1;min-width:0;"><div class="agw-name">'+String(t.cliente_nombre||'—').replace(/</g,'&lt;')+'</div>'
+        +dirHtml+notaHtml+'</div>'
+        +'<span class="eq-badge">'+badge+'</span></div>';
+    }).join('');
+    card.style.display='block';
+  }catch(e){
+    console.warn('No se pudo cargar la agenda del día (no crítico):', e);
+    if(card) card.style.display='none';
+  }
+}
+
+function agendaWizardSeleccionar(clienteId){
+  var sel=document.getElementById('sel-cliente');
+  if(!sel||!clienteId) return;
+  sel.value=clienteId;
+  onClienteChange();
+}
+
+// Preselección de una tarea de agenda para un cliente Nuevo/Particular (sin cliente_id real):
+// activa el flujo spot existente y pre-llena nombre y dirección, igual que al restaurar un borrador.
+function agendaWizardSeleccionarSpot(nombre, direccion){
+  var sel=document.getElementById('sel-cliente');
+  if(!sel) return;
+  sel.value='__spot__';
+  onClienteChange();
+  var sn=document.getElementById('spot-nombre'); if(sn) sn.value=nombre||'';
+  var sd=document.getElementById('spot-direccion'); if(sd) sd.value=direccion||'';
+  if(typeof onSpotNombre==='function') onSpotNombre();
+}
+
+// Al enviar una guía, marca como completada la tarea de agenda correspondiente (si existe).
+// Aislado: cualquier error acá no debe afectar el envío de la guía, que ya se realizó.
+// Para clientes Nuevo/Particular, clienteId siempre llega null y el match es solo por nombre.
+async function agendaAutoCompletar(clienteId, clienteNombre, fecha, tecnico, reporteId){
+  try{
+    var q='estado=eq.pendiente&fecha=eq.'+fecha;
+    if(clienteId) q+='&cliente_id=eq.'+clienteId;
+    else q+='&cliente_nombre=eq.'+encodeURIComponent(clienteNombre||'');
+    var tareas=await sbGet('tareas_dia', q);
+    if(tareas && tareas.length){
+      await sbPatch('tareas_dia', tareas[0].id, {estado:'completada', tecnico_completo:tecnico, reporte_id:reporteId||null});
+    }
+  }catch(e){
+    console.warn('No se pudo actualizar la agenda tras enviar la guía (no crítico):', e);
+  }
+}
+
 // ── Sincronizar datos desde Supabase ─────────────────────
 async function sincronizarDatos(){
   if(!navigator.onLine) return false;
@@ -2720,8 +2831,15 @@ async function enviarPendientes(){
       var payload = Object.assign({}, p, {numero_guia: numGuiaReal});
       delete payload._pendienteId;
       delete payload._fechaGuardado;
-      await sbPost('reportes', payload);
+      var respData = await sbPost('reportes', payload);
       exitosos.push(p._pendienteId);
+
+      // Reflejar en la agenda del día, si esta visita correspondía a una tarea programada (aislado, no crítico)
+      // El payload en cola nunca trae cliente_id, así que siempre se matchea por nombre (spot o no).
+      if(typeof agendaAutoCompletar==='function'){
+        var repIdOffline = (respData && respData[0]) ? respData[0].id : null;
+        agendaAutoCompletar(null, payload.cliente, payload.fecha, payload.tecnico, repIdOffline);
+      }
 
       // Si es cliente particular, registrar/actualizar seguimiento
       if(payload.es_spot){

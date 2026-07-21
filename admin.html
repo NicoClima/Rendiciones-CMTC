@@ -365,6 +365,7 @@ if(sessionStorage.getItem('climapro_admin')==='1'){
   <div class="admin-body">
     <div class="admin-tabs">
       <button class="admin-tab active" onclick="adminTab('scorecard')">📊 Scorecard</button>
+      <button class="admin-tab" onclick="adminTab('agenda')">📅 Agenda</button>
       <button class="admin-tab" onclick="adminTab('clientes')">👥 Clientes</button>
       <button class="admin-tab" onclick="adminTab('historial')">📋 Historial</button>
       <button class="admin-tab" onclick="adminTab('nuevo-cliente')">➕ Nuevo</button>
@@ -672,6 +673,48 @@ if(sessionStorage.getItem('climapro_admin')==='1'){
           <button class="sc-back" onclick="scCerrarDrilldown()">← Volver a la lista</button>
           <div class="sc-detail-box" id="sc-detail-content"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- TAB: AGENDA -->
+    <div class="admin-content" id="tab-agenda">
+      <div class="a-card">
+        <div class="a-card-title">📅 Programar visita</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px;">
+          Si no seleccionas técnicos, la tarea queda visible para todos (comportamiento por defecto).
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <button class="btn-outline" onclick="agendaCambiarFecha(-1)">◀</button>
+          <input type="date" id="agenda-fecha" style="flex:1;padding:8px 10px;border-radius:var(--radius-sm);border:0.5px solid var(--gray3);font-family:var(--font);font-size:13px;background:var(--white);color:var(--text);" onchange="agendaFechaCambio()">
+          <button class="btn-outline" onclick="agendaCambiarFecha(1)">▶</button>
+          <button class="btn-outline" onclick="agendaIrHoy()">Hoy</button>
+        </div>
+        <div class="a-field"><label>Cliente *</label>
+          <select id="agenda-cliente" onchange="agendaClienteCambio()"><option value="">Selecciona un cliente...</option></select>
+        </div>
+        <div class="a-field" id="agenda-spot-wrap" style="display:none;background:var(--white);border:0.5px solid var(--gray3);border-radius:var(--radius-sm);padding:8px;">
+          <label>Nombre del cliente (particular) *</label>
+          <input type="text" id="agenda-spot-nombre" placeholder="Ej: Edificio Las Rosas" style="margin-bottom:8px;">
+          <label>Dirección</label>
+          <input type="text" id="agenda-spot-direccion" placeholder="Ej: Av. Providencia 1234">
+        </div>
+        <div class="a-field">
+          <label>Técnicos asignados</label>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div style="font-size:11px;color:var(--text3);">Todos marcados por defecto. Desmarca para restringir a técnicos puntuales.</div>
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+              <button type="button" class="btn-outline" style="font-size:10px;padding:3px 8px;" onclick="agendaTecnicosToggle(true)">Todos</button>
+              <button type="button" class="btn-outline" style="font-size:10px;padding:3px 8px;" onclick="agendaTecnicosToggle(false)">Ninguno</button>
+            </div>
+          </div>
+          <div id="agenda-tecnicos-check" style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto;border:0.5px solid var(--gray3);border-radius:var(--radius-sm);padding:8px;background:var(--white);"></div>
+        </div>
+        <div class="a-field"><label>Notas</label><textarea id="agenda-notas" placeholder="Opcional..."></textarea></div>
+        <button class="btn-purple" style="width:100%;" onclick="crearTareaAgenda()">+ Agregar tarea</button>
+      </div>
+      <div class="a-card">
+        <div class="a-card-title">Tareas del día</div>
+        <div id="agenda-lista"></div>
       </div>
     </div>
 
@@ -1609,12 +1652,163 @@ async function guardarChecklist(){
 }
 
 function adminTab(tab){
-  const tabs=['scorecard','clientes','historial','nuevo-cliente','tecnicos'];
+  const tabs=['scorecard','agenda','clientes','historial','nuevo-cliente','tecnicos'];
   document.querySelectorAll('.admin-tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===tab));
   document.querySelectorAll('.admin-content').forEach(c=>c.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
   if(tab==='scorecard') cargarScorecard();
+  if(tab==='agenda') cargarAgenda();
   if(tab==='tecnicos') cargarTecnicos();
+}
+
+// ── AGENDA DE TAREAS DIARIAS ──────────────────────────────
+let _agenda=[], _agendaFecha=new Date().toISOString().split('T')[0];
+
+function agendaPoblarSelects(){
+  const selCli=document.getElementById('agenda-cliente');
+  if(selCli){
+    const actual=selCli.value;
+    selCli.innerHTML='<option value="">Selecciona un cliente...</option>'+
+      (clientes||[]).map(c=>`<option value="${c.id}">${(c.nombre||'').replace(/"/g,'&quot;')}</option>`).join('')+
+      '<option value="__spot__" style="color:#1D9E75;font-weight:600;">➕ Cliente Nuevo/ Particular</option>';
+    if(actual) selCli.value=actual;
+    agendaClienteCambio();
+  }
+  const contTec=document.getElementById('agenda-tecnicos-check');
+  if(contTec){
+    const activos=(_tecnicos||[]).filter(t=>t.activo);
+    contTec.innerHTML=activos.length ? activos.map(t=>{
+      const nombreSeguro=(t.nombre||'').replace(/"/g,'&quot;');
+      return `<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;">
+        <input type="checkbox" class="agenda-tec-cb" value="${nombreSeguro}" checked style="width:16px;height:16px;accent-color:var(--purple-dark);">
+        ${t.nombre}
+      </label>`;
+    }).join('') : '<div style="font-size:12px;color:var(--text3);">Sin técnicos activos.</div>';
+  }
+}
+
+function agendaTecnicosToggle(marcar){
+  document.querySelectorAll('.agenda-tec-cb').forEach(cb=>cb.checked=marcar);
+}
+
+function agendaClienteCambio(){
+  const sel=document.getElementById('agenda-cliente');
+  const wrap=document.getElementById('agenda-spot-wrap');
+  if(!sel||!wrap) return;
+  wrap.style.display = sel.value==='__spot__' ? 'block' : 'none';
+}
+
+async function cargarAgenda(){
+  const fInput=document.getElementById('agenda-fecha');
+  if(fInput) fInput.value=_agendaFecha;
+  const cont=document.getElementById('agenda-lista');
+  if(cont) cont.innerHTML='<div class="loading-sm">⏳ Cargando agenda...</div>';
+  try{
+    if(!clientes.length) await cargarClientes();
+    if(!_tecnicos.length) await cargarTecnicos();
+    agendaPoblarSelects();
+    _agenda=await sbGet('tareas_dia',`fecha=eq.${_agendaFecha}&order=created_at.asc`);
+    renderAgenda();
+  }catch(e){ if(cont) cont.innerHTML='⚠️ Error: '+e.message; }
+}
+
+function agendaCambiarFecha(delta){
+  const d=new Date(_agendaFecha+'T00:00:00');
+  d.setDate(d.getDate()+delta);
+  _agendaFecha=d.toISOString().split('T')[0];
+  cargarAgenda();
+}
+
+function agendaIrHoy(){
+  _agendaFecha=new Date().toISOString().split('T')[0];
+  cargarAgenda();
+}
+
+function agendaFechaCambio(){
+  const f=document.getElementById('agenda-fecha');
+  if(f && f.value){ _agendaFecha=f.value; cargarAgenda(); }
+}
+
+function _agendaEstadoPill(t){
+  if(t.estado==='completada') return '<span class="sc-pill sc-pill-ok">Completada</span>';
+  if(t.estado==='cancelada') return '<span class="sc-pill sc-pill-gray">Cancelada</span>';
+  return '<span class="sc-pill sc-pill-warn">Pendiente</span>';
+}
+
+function renderAgenda(){
+  const cont=document.getElementById('agenda-lista');
+  if(!cont) return;
+  if(!_agenda.length){ cont.innerHTML='<div class="sc-more-box">Sin tareas para este día.</div>'; return; }
+  cont.innerHTML=_agenda.map(t=>{
+    const tecs=(t.tecnicos_asignados && t.tecnicos_asignados.length) ? t.tecnicos_asignados.join(', ') : 'Todos';
+    const dirInfo=t.cliente_direccion?(' · '+String(t.cliente_direccion).replace(/</g,'&lt;')):'';
+    const notas=t.notas?(' · '+String(t.notas).replace(/</g,'&lt;')):'';
+    const completo=t.tecnico_completo?(' · Completó: '+String(t.tecnico_completo).replace(/</g,'&lt;')):'';
+    const spotTag=!t.cliente_id?'<span class="sc-pill sc-pill-blue" style="margin-right:5px;">Particular</span>':'';
+    const cancelBtn=t.estado==='pendiente' ? `<button class="btn-outline" onclick="cancelarTareaAgenda('${t.id}')">Cancelar</button>` : '';
+    return `<div class="sc-client-row" style="cursor:default;align-items:flex-start;flex-wrap:wrap;">
+      <div style="flex:1;min-width:150px;">
+        <div class="sc-name">${spotTag}${(t.cliente_nombre||'—').replace(/</g,'&lt;')}</div>
+        <div class="sc-info">Técnicos: ${tecs}${dirInfo}${notas}${completo}</div>
+      </div>
+      ${_agendaEstadoPill(t)}
+      ${cancelBtn}
+    </div>`;
+  }).join('');
+}
+
+async function crearTareaAgenda(){
+  const selCli=document.getElementById('agenda-cliente');
+  const clienteId=selCli?selCli.value:'';
+  if(!clienteId){ alert('Selecciona un cliente.'); return; }
+
+  let clienteIdFinal=null, clienteNombreFinal='', clienteDireccionFinal=null;
+  if(clienteId==='__spot__'){
+    const nombreSpot=(document.getElementById('agenda-spot-nombre')?.value||'').trim();
+    if(!nombreSpot){ alert('Ingresa el nombre del cliente particular.'); return; }
+    clienteNombreFinal=nombreSpot;
+    clienteDireccionFinal=(document.getElementById('agenda-spot-direccion')?.value||'').trim()||null;
+  } else {
+    const cliente=clientes.find(c=>c.id===clienteId);
+    clienteIdFinal=clienteId;
+    clienteNombreFinal=cliente?cliente.nombre:'';
+  }
+
+  const checks=Array.from(document.querySelectorAll('.agenda-tec-cb'));
+  const marcados=checks.filter(cb=>cb.checked).map(cb=>cb.value);
+  if(checks.length && !marcados.length){ alert('Selecciona al menos un técnico (o deja todos marcados para asignar a todos).'); return; }
+  // Si quedan todos marcados, se guarda null: la tarea queda visible para TODOS los técnicos,
+  // incluidos los que se agreguen a futuro (no queda "congelada" a la lista de hoy).
+  const todosMarcados = checks.length>0 && marcados.length===checks.length;
+  const notas=(document.getElementById('agenda-notas')?.value||'').trim()||null;
+  try{
+    const creado=await sbPost('tareas_dia',{
+      fecha:_agendaFecha,
+      cliente_id:clienteIdFinal,
+      cliente_nombre:clienteNombreFinal,
+      cliente_direccion:clienteDireccionFinal,
+      tecnicos_asignados: todosMarcados ? null : marcados,
+      notas
+    });
+    _agenda.push(creado[0]);
+    document.getElementById('agenda-notas').value='';
+    agendaTecnicosToggle(true); // reset a "todos marcados" por defecto
+    selCli.value='';
+    const spotNombreEl=document.getElementById('agenda-spot-nombre'); if(spotNombreEl) spotNombreEl.value='';
+    const spotDirEl=document.getElementById('agenda-spot-direccion'); if(spotDirEl) spotDirEl.value='';
+    agendaClienteCambio();
+    renderAgenda();
+  }catch(e){ alert('Error al agregar tarea: '+e.message); }
+}
+
+async function cancelarTareaAgenda(id){
+  if(!confirm('¿Cancelar esta tarea? (no se elimina, solo cambia de estado)')) return;
+  try{
+    await sbPatch('tareas_dia',id,{estado:'cancelada'});
+    const t=_agenda.find(x=>x.id===id);
+    if(t) t.estado='cancelada';
+    renderAgenda();
+  }catch(e){ alert('Error al cancelar: '+e.message); }
 }
 
 // ── GESTIÓN DE TÉCNICOS ───────────────────────────────────
@@ -2261,7 +2455,7 @@ function construirHTMLGuia(r){
     gris1:'#E8E4DC', gris2:'#B0ADA6', gris3:'#6E6B65',
     greenL:'#E6F4EA', greenD:'#1E6B2E',
     amberL:'#FEF3E2', amberD:'#7A4100',
-    redL:'#FDECEA', redD:'#8B0000',
+    redL:'#FDECEA', redD:'#ED1C24',
     blueL:'#E3F4FD',
   };
 
@@ -2306,9 +2500,12 @@ function construirHTMLGuia(r){
 <head>
 <meta charset="UTF-8">
 <title>Guia de Servicio N° ${numGuia}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:Arial,Helvetica,sans-serif;font-size:10px;color:${C.tinta};background:#fff;}
+  body{font-family:'IBM Plex Sans',Arial,Helvetica,sans-serif;font-size:10px;color:${C.tinta};background:#fff;}
   @page{size:letter;margin:14mm 18mm 20mm 18mm;}
   @media print{
     body{margin:0;}
@@ -2334,15 +2531,15 @@ function construirHTMLGuia(r){
   .gs-head-border2{height:1px;background:${C.cian};margin-bottom:12px;}
   .logo{height:42px;}
   .gs-num-block{text-align:right;min-width:160px;}
-  .gs-num-label{font-size:7.5px;color:${C.gris3};margin-bottom:2px;}
-  .gs-num{font-size:26px;font-weight:700;color:${C.naranja};line-height:1;margin-bottom:4px;}
+  .gs-num-label{font-family:'IBM Plex Mono',monospace;font-size:7px;text-transform:uppercase;letter-spacing:.12em;color:${C.gris3};margin-bottom:2px;}
+  .gs-num{font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:700;color:${C.naranja};line-height:1;margin-bottom:4px;letter-spacing:-0.015em;}
   .gs-tipo{display:inline-block;background:${C.oscuro};color:#fff;
-    font-size:7.5px;font-weight:700;padding:3px 10px;border-radius:3px;}
+    font-size:7.5px;font-weight:700;padding:3px 10px;border-radius:3px;font-family:'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;}
 
   /* SECCIONES */
   .sec-title{display:flex;align-items:center;gap:6px;margin:12px 0 6px;}
   .sec-bar{width:3px;height:20px;background:${C.naranja};border-radius:1px;flex-shrink:0;}
-  .sec-label{font-size:10px;font-weight:700;color:${C.oscuro};text-transform:uppercase;letter-spacing:.05em;}
+  .sec-label{font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:600;color:${C.oscuro};text-transform:uppercase;letter-spacing:.05em;}
   .sec-line{height:0.5px;background:${C.gris1};margin-bottom:6px;}
 
   /* DATA BOX */
@@ -2351,7 +2548,7 @@ function construirHTMLGuia(r){
   .data-col{padding:0 10px;}
   .data-col:first-child{border-right:0.5px solid ${C.gris1};}
   .data-row{display:flex;gap:4px;margin-bottom:4px;}
-  .data-key{font-size:8.5px;color:${C.gris3};width:72px;flex-shrink:0;}
+  .data-key{font-family:'IBM Plex Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:.04em;color:${C.gris3};width:72px;flex-shrink:0;}
   .data-val{font-size:9px;font-weight:700;color:${C.tinta};}
 
   /* OBSERVACIONES */
@@ -2364,18 +2561,18 @@ function construirHTMLGuia(r){
   .status-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
   .status-txt{font-size:10px;font-weight:700;}
   .status-sub{font-size:9px;margin-left:auto;}
-  .score-label{font-size:9px;font-weight:700;color:${C.oscuro};text-transform:uppercase;letter-spacing:.06em;margin:2px 0 8px;display:flex;align-items:center;gap:6px;}
+  .score-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:600;color:${C.oscuro};text-transform:uppercase;letter-spacing:.06em;margin:2px 0 8px;display:flex;align-items:center;gap:6px;}
   .score-bar{width:3px;height:13px;background:${C.naranja};border-radius:1px;}
   .score-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:6px;}
   .score-card{border-radius:8px;padding:10px 4px;text-align:center;}
-  .score-val{font-size:22px;font-weight:700;line-height:1;}
-  .score-lbl{font-size:7.5px;margin-top:4px;font-weight:600;letter-spacing:.02em;}
+  .score-val{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;line-height:1;}
+  .score-lbl{font-family:'IBM Plex Mono',monospace;font-size:7px;margin-top:4px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;}
   .eq-mini{display:flex;align-items:center;gap:8px;background:${C.fondo};border-radius:6px;padding:6px 10px;margin-bottom:5px;page-break-inside:avoid;break-inside:avoid;}
   .eq-mini-name{font-size:9.5px;font-weight:700;flex:1;color:${C.tinta};}
   .eq-mini-pill{font-size:8px;font-weight:700;padding:2px 8px;border-radius:10px;}
   .metric{border-radius:4px;padding:6px;text-align:center;border:0.5px solid ${C.gris1};}
-  .metric-val{font-size:18px;font-weight:700;line-height:1;}
-  .metric-lbl{font-size:7px;color:${C.gris3};margin-top:2px;}
+  .metric-val{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;line-height:1;}
+  .metric-lbl{font-family:'IBM Plex Mono',monospace;font-size:6.5px;color:${C.gris3};margin-top:2px;text-transform:uppercase;letter-spacing:.04em;}
 
   /* FIRMA */
   .firma-wrap{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:8px;}
@@ -2388,13 +2585,13 @@ function construirHTMLGuia(r){
   .gs-footer{position:static;margin-top:10px;background:#fff;}
   .footer-bar{height:1.5px;background:${C.cian};}
   .footer-content{display:flex;justify-content:space-between;padding:4px 18mm 6px;font-size:7.5px;color:${C.gris3};}
-  .footer-bold{font-weight:700;color:${C.oscuro};}
+  .footer-bold{font-family:'Space Grotesk',sans-serif;font-weight:600;color:${C.oscuro};}
 
   /* FOTOS PAGE */
   .foto-page-head{display:flex;justify-content:space-between;align-items:center;
     padding-bottom:6px;border-bottom:1.5px solid ${C.cian};margin-bottom:12px;}
-  .foto-page-title{font-size:10px;font-weight:700;color:${C.oscuro};}
-  .foto-page-meta{font-size:8px;color:${C.gris3};}
+  .foto-page-title{font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;color:${C.oscuro};}
+  .foto-page-meta{font-family:'IBM Plex Mono',monospace;font-size:7.5px;color:${C.gris3};}
   .foto-eq-head{background:${C.oscuro};color:#fff;font-size:10px;font-weight:700;
     padding:5px 8px;border-radius:4px;margin:10px 0 6px;}
   .foto-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;}
@@ -2421,6 +2618,7 @@ function construirHTMLGuia(r){
     <div class="gs-num-label">GUÍA DE SERVICIO</div>
     <div class="gs-num">N° ${numGuia}</div>
     <span class="gs-tipo">${r.tipo_visita?.toUpperCase()||'VISITA'}</span>
+    <div style="display:flex;justify-content:flex-end;margin-top:3px;"><span style="width:36px;height:5px;background:#00AEEF;transform:skewX(-18deg);display:block;"></span></div>
   </div>
 </div>
 <div class="gs-head-border2"></div>
@@ -2502,7 +2700,7 @@ ${r.req_presup&&r.presup_desc?`<div class="obs-box" style="border-color:#EF9F27;
     <div style="height:44px;"></div>
     <div class="firma-line"></div>
     <div class="firma-nombre">${r.tecnico||'___________________'}</div>
-    <div class="firma-rol">Técnico Climatermic</div>
+    <div class="firma-rol">Técnico IS Climatermic</div>
   </div>
 </div>
 
@@ -2510,7 +2708,7 @@ ${r.req_presup&&r.presup_desc?`<div class="obs-box" style="border-color:#EF9F27;
 <div class="gs-footer">
   <div class="footer-bar"></div>
   <div class="footer-content">
-    <div><span class="footer-bold">Climatermic Ingeniería y Servicios</span><br>www.climatermic.cl  ·  servicios@climatermic.cl  ·  +562 2 372 7585</div>
+    <div><span class="footer-bold">Ingeniería y Servicios Climatermic</span><br>www.climatermic.cl  ·  servicios@climatermic.cl  ·  +562 2 372 7585</div>
     <div style="text-align:right;">Guía N° ${numGuia}  ·  ${r.fecha||'—'}</div>
   </div>
 </div>
@@ -2528,7 +2726,7 @@ ${checklistHTML}
 <div class="gs-footer">
   <div class="footer-bar"></div>
   <div class="footer-content">
-    <div><span class="footer-bold">Climatermic Ingeniería y Servicios</span><br>www.climatermic.cl  ·  servicios@climatermic.cl  ·  +562 2 372 7585</div>
+    <div><span class="footer-bold">Ingeniería y Servicios Climatermic</span><br>www.climatermic.cl  ·  servicios@climatermic.cl  ·  +562 2 372 7585</div>
     <div style="text-align:right;">Guía N° ${numGuia}  ·  ${r.fecha||'—'}</div>
   </div>
 </div>
@@ -2588,7 +2786,7 @@ ${secciones.map(s=>{
 <div class="gs-footer">
   <div class="footer-bar"></div>
   <div class="footer-content">
-    <div><span class="footer-bold">Climatermic Ingeniería y Servicios</span><br>www.climatermic.cl  ·  servicios@climatermic.cl  ·  +562 2 372 7585</div>
+    <div><span class="footer-bold">Ingeniería y Servicios Climatermic</span><br>www.climatermic.cl  ·  servicios@climatermic.cl  ·  +562 2 372 7585</div>
     <div style="text-align:right;">Guía N° ${numGuia}  ·  ${r.fecha||'—'}</div>
   </div>
 </div>
@@ -2657,6 +2855,9 @@ async function _generarPDFBlob(r){
   iframe.srcdoc=htmlClean;
 
   await new Promise(function(resolve){ iframe.onload=resolve; });
+  if(iframe.contentDocument.fonts && iframe.contentDocument.fonts.ready){
+    try{ await iframe.contentDocument.fonts.ready; }catch(e){}
+  }
   var imgs=iframe.contentDocument.querySelectorAll('img');
   await Promise.all(Array.prototype.map.call(imgs,function(img){
     if(img.complete) return Promise.resolve();
